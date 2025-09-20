@@ -73,11 +73,9 @@ graph TB
     
     ANPZDB -.->|FDW Read Catalogs| CentralDB
     KRNPZDB -.->|FDW Read Catalogs| CentralDB
-    SNPZDB -.->|FDW Read Catalogs| CentralDB
-    
-    ANPZDB -->|Event Sync| CentralDB
-    KRNPZDB -->|Event Sync| CentralDB
-    SNPZDB -->|Event Sync| CentralDB
+   
+
+   
     
     ConsoleApp --> CentralDB
     AvaloniaUI --> CentralDB
