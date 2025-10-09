@@ -1,0 +1,132 @@
+{
+  "version": 3,
+  "targets": {
+    "net8.0": {
+      "OilErp.Core/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v8.0",
+        "compile": {
+          "bin/placeholder/OilErp.Core.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/OilErp.Core.dll": {}
+        }
+      },
+      "OilErp.Infrastructure/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v8.0",
+        "dependencies": {
+          "OilErp.Core": "1.0.0"
+        },
+        "compile": {
+          "bin/placeholder/OilErp.Infrastructure.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/OilErp.Infrastructure.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "OilErp.Core/1.0.0": {
+      "type": "project",
+      "path": "../OilErp.Core/OilErp.Core.csproj",
+      "msbuildProject": "../OilErp.Core/OilErp.Core.csproj"
+    },
+    "OilErp.Infrastructure/1.0.0": {
+      "type": "project",
+      "path": "../OilErp.Infrastructure/OilErp.Infrastructure.csproj",
+      "msbuildProject": "../OilErp.Infrastructure/OilErp.Infrastructure.csproj"
+    }
+  },
+  "projectFileDependencyGroups": {
+    "net8.0": [
+      "OilErp.Core >= 1.0.0",
+      "OilErp.Infrastructure >= 1.0.0"
+    ]
+  },
+  "packageFolders": {
+    "/Users/Ilia/.nuget/packages/": {}
+  },
+  "project": {
+    "version": "1.0.0",
+    "restore": {
+      "projectUniqueName": "/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Tests.Runner/OilErp.Tests.Runner.csproj",
+      "projectName": "OilErp.Tests.Runner",
+      "projectPath": "/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Tests.Runner/OilErp.Tests.Runner.csproj",
+      "packagesPath": "/Users/Ilia/.nuget/packages/",
+      "outputPath": "/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Tests.Runner/obj/",
+      "projectStyle": "PackageReference",
+      "configFilePaths": [
+        "/Users/Ilia/.nuget/NuGet/NuGet.Config"
+      ],
+      "originalTargetFrameworks": [
+        "net8.0"
+      ],
+      "sources": {
+        "https://api.nuget.org/v3/index.json": {}
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "projectReferences": {
+            "/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Core/OilErp.Core.csproj": {
+              "projectPath": "/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Core/OilErp.Core.csproj"
+            },
+            "/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/OilErp.Infrastructure.csproj": {
+              "projectPath": "/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/OilErp.Infrastructure.csproj"
+            }
+          }
+        }
+      },
+      "warningProperties": {
+        "allWarningsAsErrors": true,
+        "warnAsError": [
+          "NU1605"
+        ]
+      },
+      "restoreAuditProperties": {
+        "enableAudit": "true",
+        "auditLevel": "low",
+        "auditMode": "direct"
+      },
+      "SdkAnalysisLevel": "9.0.300"
+    },
+    "frameworks": {
+      "net8.0": {
+        "targetAlias": "net8.0",
+        "imports": [
+          "net461",
+          "net462",
+          "net47",
+          "net471",
+          "net472",
+          "net48",
+          "net481"
+        ],
+        "assetTargetFallback": true,
+        "warn": true,
+        "downloadDependencies": [
+          {
+            "name": "Microsoft.AspNetCore.App.Ref",
+            "version": "[8.0.20, 8.0.20]"
+          },
+          {
+            "name": "Microsoft.NETCore.App.Host.osx-arm64",
+            "version": "[8.0.20, 8.0.20]"
+          },
+          {
+            "name": "Microsoft.NETCore.App.Ref",
+            "version": "[8.0.20, 8.0.20]"
+          }
+        ],
+        "frameworkReferences": {
+          "Microsoft.NETCore.App": {
+            "privateAssets": "all"
+          }
+        },
+        "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/9.0.305/PortableRuntimeIdentifierGraph.json"
+      }
+    }
+  }
+}

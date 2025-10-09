@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "0pvCH/k30JE=",
+  "success": true,
+  "projectFilePath": "/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Tests.Runner/OilErp.Tests.Runner.csproj",
+  "expectedPackageFiles": [
+    "/Users/Ilia/.nuget/packages/microsoft.netcore.app.ref/8.0.20/microsoft.netcore.app.ref.8.0.20.nupkg.sha512",
+    "/Users/Ilia/.nuget/packages/microsoft.aspnetcore.app.ref/8.0.20/microsoft.aspnetcore.app.ref.8.0.20.nupkg.sha512",
+    "/Users/Ilia/.nuget/packages/microsoft.netcore.app.host.osx-arm64/8.0.20/microsoft.netcore.app.host.osx-arm64.8.0.20.nupkg.sha512"
+  ],
+  "logs": []
+}

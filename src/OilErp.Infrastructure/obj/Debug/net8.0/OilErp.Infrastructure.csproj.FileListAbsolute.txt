@@ -1,0 +1,16 @@
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/bin/Debug/net8.0/OilErp.Infrastructure.deps.json
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/bin/Debug/net8.0/OilErp.Infrastructure.dll
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/bin/Debug/net8.0/OilErp.Infrastructure.pdb
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/bin/Debug/net8.0/OilErp.Core.dll
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/bin/Debug/net8.0/OilErp.Core.pdb
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/obj/Debug/net8.0/OilErp.Infrastructure.csproj.AssemblyReference.cache
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/obj/Debug/net8.0/OilErp.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/obj/Debug/net8.0/OilErp.Infrastructure.AssemblyInfoInputs.cache
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/obj/Debug/net8.0/OilErp.Infrastructure.AssemblyInfo.cs
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/obj/Debug/net8.0/OilErp.Infrastructure.csproj.CoreCompileInputs.cache
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/obj/Debug/net8.0/OilErp.Infrastructure.sourcelink.json
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/obj/Debug/net8.0/OilErp.I.4CA6C858.Up2Date
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/obj/Debug/net8.0/OilErp.Infrastructure.dll
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/obj/Debug/net8.0/refint/OilErp.Infrastructure.dll
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/obj/Debug/net8.0/OilErp.Infrastructure.pdb
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/obj/Debug/net8.0/ref/OilErp.Infrastructure.dll

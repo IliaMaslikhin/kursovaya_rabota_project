@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "NTT1kOR2LFA=",
+  "success": true,
+  "projectFilePath": "/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/OilErp.Infrastructure.csproj",
+  "expectedPackageFiles": [
+    "/Users/Ilia/.nuget/packages/microsoft.netcore.app.ref/8.0.20/microsoft.netcore.app.ref.8.0.20.nupkg.sha512",
+    "/Users/Ilia/.nuget/packages/microsoft.aspnetcore.app.ref/8.0.20/microsoft.aspnetcore.app.ref.8.0.20.nupkg.sha512"
+  ],
+  "logs": []
+}
