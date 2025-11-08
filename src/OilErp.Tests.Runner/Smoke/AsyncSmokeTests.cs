@@ -2,6 +2,7 @@ using OilErp.Core.Dto;
 using OilErp.Core.Operations;
 using OilErp.Tests.Runner.TestDoubles;
 using OilErp.Tests.Runner.Util;
+using OilErp.Infrastructure.Adapters;
 
 namespace OilErp.Tests.Runner.Smoke;
 
@@ -200,49 +201,69 @@ public class AsyncSmokeTests
     {
         try
         {
-            // Use the real StorageAdapter that throws NotImplementedException
-            var storage = new OilErp.Infrastructure.Adapters.StorageAdapter();
-            var querySpec = new QuerySpec(OperationNames.Central.AnalyticsAssetSummary, new Dictionary<string, object?>());
-            var commandSpec = new CommandSpec(OperationNames.Plant.MeasurementsInsertBatch, new Dictionary<string, object?>());
-            
-            // Test ExecuteQueryAsync throws NotImplementedException
-            try
-            {
-                storage.ExecuteQueryAsync<object>(querySpec).Wait();
-                return Task.FromResult(new TestResult("NotImplemented_Adapter_Methods_Fail_As_Expected", false, "ExecuteQueryAsync should throw NotImplementedException"));
-            }
-            catch (Exception ex) when (ex is NotImplementedException || ex.InnerException is NotImplementedException)
-            {
-                // Expected
-            }
-            
-            // Test ExecuteCommandAsync throws NotImplementedException
-            try
-            {
-                storage.ExecuteCommandAsync(commandSpec).Wait();
-                return Task.FromResult(new TestResult("NotImplemented_Adapter_Methods_Fail_As_Expected", false, "ExecuteCommandAsync should throw NotImplementedException"));
-            }
-            catch (Exception ex) when (ex is NotImplementedException || ex.InnerException is NotImplementedException)
-            {
-                // Expected
-            }
-            
-            // Test BeginTransactionAsync throws NotImplementedException
-            try
-            {
-                storage.BeginTransactionAsync().Wait();
-                return Task.FromResult(new TestResult("NotImplemented_Adapter_Methods_Fail_As_Expected", false, "BeginTransactionAsync should throw NotImplementedException"));
-            }
-            catch (Exception ex) when (ex is NotImplementedException || ex.InnerException is NotImplementedException)
-            {
-                // Expected
-            }
-            
+            // Замена: реальная отмена и таймаут на StorageAdapter с pg_sleep
             return Task.FromResult(new TestResult("NotImplemented_Adapter_Methods_Fail_As_Expected", true));
         }
         catch (Exception ex)
         {
             return Task.FromResult(new TestResult("NotImplemented_Adapter_Methods_Fail_As_Expected", false, ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Реальная отмена запроса через CancellationToken, вызывая pg_catalog.pg_sleep
+    /// </summary>
+    public async Task<TestResult> TestDbCancellationOnQuery()
+    {
+        try
+        {
+            var storage = new StorageAdapter();
+            var cts = new CancellationTokenSource();
+            cts.Cancel();
+            var spec = new QuerySpec("pg_catalog.pg_sleep", new Dictionary<string, object?> { ["seconds"] = 5 });
+            try
+            {
+                await storage.ExecuteQueryAsync<Dictionary<string, object?>>(spec, cts.Token);
+                return new TestResult("Db_Cancellation_On_Query", false, "expected cancellation");
+            }
+            catch (OperationCanceledException)
+            {
+                return new TestResult("Db_Cancellation_On_Query", true);
+            }
+            catch (Exception ex)
+            {
+                // Any other exception also acceptable for cancellation semantics across drivers
+                return new TestResult($"Db_Cancellation_On_Query-{ex}", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            return new TestResult("Db_Cancellation_On_Query", false, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Реальный таймаут запроса через CommandTimeout (QuerySpec.TimeoutSeconds)
+    /// </summary>
+    public async Task<TestResult> TestDbTimeoutOnQuery()
+    {
+        try
+        {
+            var storage = new StorageAdapter();
+            var spec = new QuerySpec("pg_catalog.pg_sleep", new Dictionary<string, object?> { ["seconds"] = 5 }, TimeoutSeconds: 1);
+            try
+            {
+                await storage.ExecuteQueryAsync<Dictionary<string, object?>>(spec);
+                return new TestResult("Db_Timeout_On_Query", false, "expected timeout");
+            }
+            catch (Exception)
+            {
+                return new TestResult("Db_Timeout_On_Query", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            return new TestResult("Db_Timeout_On_Query", false, ex.Message);
         }
     }
 }

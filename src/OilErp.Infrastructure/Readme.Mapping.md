@@ -1,11 +1,28 @@
-# Operation Name to SQL Object Mapping
+# Operation Name to SQL Mapping
 
-This document maps C# operation names to their corresponding SQL functions and procedures.
+Ниже приведена карта соответствий между C# константами `OperationNames` и реальными SQL-операциями. Значение каждой константы — fully-qualified имя `schema.name`.
 
-| Operation Name | SQL Object | File Path |
-|---|---|---|
-| `plant.measurements.insert_batch` | `sp_insert_measurement_batch(p_asset_code TEXT, p_points JSONB, p_source_plant TEXT)` | `sql/anpz/04_function_sp_insert_measurement_batch.sql` (lines 1-84)<br/>`sql/krnpz/04_function_sp_insert_measurement_batch.sql` (lines 1-84) |
-| `central.events.ingest` | `fn_ingest_events(p_limit int DEFAULT 1000)` | `sql/central/02_functions_core.sql` (lines 93-156) |
-| `central.events.cleanup` | `fn_events_cleanup(p_older_than interval DEFAULT '30 days')` | `sql/central/02_functions_core.sql` (lines 171-182) |
-| `central.analytics.asset_summary` | `fn_asset_summary_json(p_asset_code text, p_policy_name text DEFAULT 'default')` | `sql/central/02_functions_core.sql` (lines 223-253) |
-| `central.analytics.top_assets_by_cr` | `fn_top_assets_by_cr(p_limit int DEFAULT 50)` | `sql/central/02_functions_core.sql` (lines 256-265) |
+| OperationName | SQL | Kind | Returns | Params |
+|---|---|---|---|---|
+| `Plant.MeasurementsInsertBatch` | `public.sp_insert_measurement_batch` | Command | SCALAR | `p_asset_code text, p_points jsonb, p_source_plant text` |
+| `Plant.MeasurementsInsertBatchPrc` | `public.sp_insert_measurement_batch_prc` | Command | VOID | `p_asset_code text, p_points jsonb, p_source_plant text` |
+| `Central.CalcCr` | `public.fn_calc_cr` | Query | SCALAR | `prev_thk numeric, prev_date timestamptz, last_thk numeric, last_date timestamptz` |
+| `Central.AssetUpsert` | `public.fn_asset_upsert` | Command | SCALAR | `p_asset_code text, p_name text DEFAULT NULL, p_type text DEFAULT NULL, p_plant_code text DEFAULT NULL` |
+| `Central.PolicyUpsert` | `public.fn_policy_upsert` | Command | SCALAR | `p_name text, p_low numeric, p_med numeric, p_high numeric` |
+| `Central.EventsEnqueue` | `public.fn_events_enqueue` | Command | SCALAR | `p_event_type text, p_source_plant text, p_payload jsonb` |
+| `Central.EventsPeek` | `public.fn_events_peek` | Query | SET | `p_limit int DEFAULT 100` |
+| `Central.EventsIngest` | `public.fn_ingest_events` | Command | SCALAR | `p_limit int DEFAULT 1000` |
+| `Central.EventsRequeue` | `public.fn_events_requeue` | Command | SCALAR | `p_ids bigint[]` |
+| `Central.EventsCleanup` | `public.fn_events_cleanup` | Command | SCALAR | `p_older_than interval DEFAULT '30 days'` |
+| `Central.EvalRisk` | `public.fn_eval_risk` | Query | SET | `p_asset_code text, p_policy_name text DEFAULT 'default'` |
+| `Central.AnalyticsAssetSummary` | `public.fn_asset_summary_json` | Query | JSON | `p_asset_code text, p_policy_name text DEFAULT 'default'` |
+| `Central.AnalyticsTopAssetsByCr` | `public.fn_top_assets_by_cr` | Query | SET | `p_limit int DEFAULT 50` |
+| `Central.SpIngestEvents` | `public.sp_ingest_events` | Command | VOID | `p_limit int DEFAULT 1000` |
+| `Central.SpEventsEnqueue` | `public.sp_events_enqueue` | Command | VOID | `p_event_type text, p_source_plant text, p_payload jsonb` |
+| `Central.SpEventsRequeue` | `public.sp_events_requeue` | Command | VOID | `p_ids bigint[]` |
+| `Central.SpEventsCleanup` | `public.sp_events_cleanup` | Command | VOID | `p_older_than interval DEFAULT '30 days'` |
+| `Central.SpPolicyUpsert` | `public.sp_policy_upsert` | Command | VOID | `p_name text, p_low numeric, p_med numeric, p_high numeric` |
+| `Central.SpAssetUpsert` | `public.sp_asset_upsert` | Command | VOID | `p_asset_code text, p_name text DEFAULT NULL, p_type text DEFAULT NULL, p_plant_code text DEFAULT NULL` |
+
+Примечания
+- Kind определяется так: RETURNS SET/табличный → Query; RETURNS JSON/JSONB → Query; PROCEDURE/RETURNS void → Command; прочие скалярные возвращаемые типы помечены как SCALAR (доп. категория для ясности).

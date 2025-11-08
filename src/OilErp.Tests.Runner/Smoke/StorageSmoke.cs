@@ -1,7 +1,6 @@
 using OilErp.Core.Dto;
 using OilErp.Core.Operations;
 using OilErp.Infrastructure.Adapters;
-using OilErp.Tests.Runner.TestDoubles;
 using OilErp.Tests.Runner.Util;
 
 namespace OilErp.Tests.Runner.Smoke;
@@ -12,61 +11,46 @@ namespace OilErp.Tests.Runner.Smoke;
 public class StorageSmoke
 {
     /// <summary>
-    /// Tests that all IStoragePort methods throw NotImplementedException
+    /// Простой Query к реальной БД (top-by-cr limit 1)
     /// </summary>
-    /// <returns>Test result</returns>
-    public Task<TestResult> TestStorageMethodsNotImplemented()
+    public async Task<TestResult> TestDbQueryTopByCr()
     {
         try
         {
             var storage = new StorageAdapter();
-            var querySpec = new QuerySpec(
-                OperationNames.Central.AnalyticsAssetSummary,
-                new Dictionary<string, object?> { ["asset_code"] = "TEST" }
-            );
-            var commandSpec = new CommandSpec(
-                OperationNames.Plant.MeasurementsInsertBatch,
-                new Dictionary<string, object?> { ["asset_code"] = "TEST" }
-            );
-
-            // Test ExecuteQueryAsync
-            try
-            {
-                storage.ExecuteQueryAsync<object>(querySpec).Wait();
-                return Task.FromResult(new TestResult("Storage_Methods_NotImplemented", false, "ExecuteQueryAsync did not throw"));
-            }
-            catch (NotImplementedException)
-            {
-                // Expected
-            }
-
-            // Test ExecuteCommandAsync
-            try
-            {
-                storage.ExecuteCommandAsync(commandSpec).Wait();
-                return Task.FromResult(new TestResult("Storage_Methods_NotImplemented", false, "ExecuteCommandAsync did not throw"));
-            }
-            catch (NotImplementedException)
-            {
-                // Expected
-            }
-
-            // Test BeginTransactionAsync
-            try
-            {
-                storage.BeginTransactionAsync().Wait();
-                return Task.FromResult(new TestResult("Storage_Methods_NotImplemented", false, "BeginTransactionAsync did not throw"));
-            }
-            catch (NotImplementedException)
-            {
-                // Expected
-            }
-
-            return Task.FromResult(new TestResult("Storage_Methods_NotImplemented", true));
+            var spec = new QuerySpec(OperationNames.Central.AnalyticsTopAssetsByCr, new Dictionary<string, object?> { ["p_limit"] = 1 });
+            var rows = await storage.ExecuteQueryAsync<Dictionary<string, object?>>(spec);
+            return new TestResult("Db_Query_TopByCr", true);
         }
         catch (Exception ex)
         {
-            return Task.FromResult(new TestResult("Storage_Methods_NotImplemented", false, ex.Message));
+            return new TestResult("Db_Query_TopByCr", false, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Простой Command к реальной БД (enqueue event)
+    /// </summary>
+    public async Task<TestResult> TestDbCommandEnqueue()
+    {
+        try
+        {
+            var storage = new StorageAdapter();
+            var spec = new CommandSpec(
+                OperationNames.Central.EventsEnqueue,
+                new Dictionary<string, object?>
+                {
+                    ["p_event_type"] = "SMOKE_TEST",
+                    ["p_source_plant"] = "ANPZ",
+                    ["p_payload"] = "{\"hello\":\"world\"}"
+                }
+            );
+            var affected = await storage.ExecuteCommandAsync(spec);
+            return new TestResult("Db_Command_Enqueue", true);
+        }
+        catch (Exception ex)
+        {
+            return new TestResult("Db_Command_Enqueue", false, ex.Message);
         }
     }
 
