@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using OilErp.Core.Abstractions;
 using OilErp.Core.Dto;
@@ -46,7 +47,7 @@ public class StorageAdapter : DbClientBase
         await using var _ = conn.Item2; // ensures disposal if we opened a new connection
         var npg = conn.Item1;
 
-        var meta = await GetRoutineMetadataAsync(schema, name, npg, spec.Parameters?.Count ?? 0, ct);
+        var meta = await GetRoutineMetadataAsync(schema, name, npg, ct);
 
         if (meta.IsProcedure)
         {
@@ -116,7 +117,7 @@ public class StorageAdapter : DbClientBase
         await using var _ = conn.Item2;
         var npg = conn.Item1;
 
-        var meta = await GetRoutineMetadataAsync(schema, name, npg, spec.Parameters?.Count ?? 0, ct);
+        var meta = await GetRoutineMetadataAsync(schema, name, npg, ct);
         var cmd = BuildRoutineCommand(npg, meta, spec.Parameters, isQuery: !meta.IsProcedure);
         cmd.CommandTimeout = ResolveTimeout(spec.TimeoutSeconds);
 
@@ -248,55 +249,28 @@ public class StorageAdapter : DbClientBase
     private NpgsqlCommand BuildRoutineCommand(NpgsqlConnection conn, RoutineMetadata meta, IReadOnlyDictionary<string, object?>? parameters, bool isQuery)
     {
         var cmd = conn.CreateCommand();
-        parameters ??= new Dictionary<string, object?>();
+        var parameterPairs = parameters?.ToList() ?? new List<KeyValuePair<string, object?>>();
 
-        // Построить список именованных аргументов: argname => @argname
-        var args = string.Join(", ", parameters.Select(kv => $"{kv.Key} => @{kv.Key}"));
+        var args = BuildArgumentList(cmd, meta, parameterPairs);
+        var callText = args.Length == 0
+            ? $"\"{meta.Schema}\".\"{meta.Name}\"()"
+            : $"\"{meta.Schema}\".\"{meta.Name}\"({args})";
 
         if (meta.IsProcedure)
         {
-            cmd.CommandText = args.Length == 0
-                ? $"call \"{meta.Schema}\".\"{meta.Name}\"()"
-                : $"call \"{meta.Schema}\".\"{meta.Name}\"({args})";
+            cmd.CommandText = $"call {callText}";
+        }
+        else if (meta.ReturnsSet)
+        {
+            cmd.CommandText = $"select * from {callText}";
+        }
+        else if (meta.ReturnsJson)
+        {
+            cmd.CommandText = $"select ({callText})::text";
         }
         else
         {
-            var selectExpr = meta.ReturnsJson
-                ? $"\"{meta.Schema}\".\"{meta.Name}\"({args})::text"
-                : meta.ReturnsSet
-                    ? $"* from \"{meta.Schema}\".\"{meta.Name}\"({args})"
-                    : $"\"{meta.Schema}\".\"{meta.Name}\"({args})";
-
-            cmd.CommandText = meta.ReturnsSet
-                ? $"select {selectExpr}"
-                : $"select {selectExpr}";
-        }
-
-        foreach (var (key, value) in parameters)
-        {
-            var p = cmd.Parameters.Add(new NpgsqlParameter($"@{key}", value ?? DBNull.Value));
-            if (value is null)
-            {
-                // leave db type null
-            }
-            else if (LooksLikeJsonParam(key))
-            {
-                p.NpgsqlDbType = NpgsqlDbType.Jsonb;
-                if (value is not string)
-                {
-                    p.Value = JsonSerializer.Serialize(value);
-                }
-            }
-            else if (value is DateTimeOffset dto)
-            {
-                p.Value = dto.UtcDateTime;
-            }
-            else if (value is JsonElement je)
-            {
-                p.NpgsqlDbType = NpgsqlDbType.Jsonb;
-                p.Value = je.GetRawText();
-            }
-            // otherwise let Npgsql infer type
+            cmd.CommandText = $"select {callText}";
         }
 
         if (_currentTx.Value?.Transaction != null)
@@ -306,9 +280,58 @@ public class StorageAdapter : DbClientBase
         return cmd;
     }
 
-    private static async Task<RoutineMetadata> GetRoutineMetadataAsync(string schema, string name, NpgsqlConnection conn, int argCount, CancellationToken ct)
+    private static string BuildArgumentList(NpgsqlCommand cmd, RoutineMetadata meta, IReadOnlyList<KeyValuePair<string, object?>> parameters)
     {
-        const string sql = @"select p.prokind, p.proretset, rt.typname as rettype
+        if (parameters.Count == 0) return string.Empty;
+
+        if (meta.SupportsNamedArguments)
+        {
+            foreach (var (key, value) in parameters)
+            {
+                AddParameter(cmd, key, key, value);
+            }
+            return string.Join(", ", parameters.Select(kv => $"{kv.Key} => @{kv.Key}"));
+        }
+
+        var placeholders = new List<string>(parameters.Count);
+        for (int i = 0; i < parameters.Count; i++)
+        {
+            var placeholder = $"p{i}";
+            var (logicalName, value) = parameters[i];
+            AddParameter(cmd, placeholder, logicalName, value);
+            placeholders.Add($"@{placeholder}");
+        }
+        return string.Join(", ", placeholders);
+    }
+
+    private static void AddParameter(NpgsqlCommand cmd, string placeholder, string logicalName, object? value)
+    {
+        var parameter = cmd.Parameters.Add(new NpgsqlParameter($"@{placeholder}", value ?? DBNull.Value));
+        if (value is null) return;
+
+        if (LooksLikeJsonParam(logicalName))
+        {
+            parameter.NpgsqlDbType = NpgsqlDbType.Jsonb;
+            parameter.Value = value is string s ? s : JsonSerializer.Serialize(value);
+        }
+        else if (value is DateTimeOffset dto)
+        {
+            parameter.Value = dto.UtcDateTime;
+        }
+        else if (value is JsonElement je)
+        {
+            parameter.NpgsqlDbType = NpgsqlDbType.Jsonb;
+            parameter.Value = je.GetRawText();
+        }
+        else
+        {
+            parameter.Value = value;
+        }
+    }
+
+    private static async Task<RoutineMetadata> GetRoutineMetadataAsync(string schema, string name, NpgsqlConnection conn, CancellationToken ct)
+    {
+        const string sql = @"select p.prokind, p.proretset, rt.typname as rettype, p.pronargs, p.proargnames
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
 join pg_type rt on rt.oid = p.prorettype
@@ -323,13 +346,25 @@ order by p.oid desc limit 1";
         if (!await reader.ReadAsync(ct))
             throw new InvalidOperationException($"Routine not found: {schema}.{name}");
 
-        var prokind = reader.GetString(0); // f=function, p=procedure
+        var prokind = reader.GetFieldValue<char>(0); // f=function, p=procedure
         var proretset = reader.GetBoolean(1);
         var rettype = reader.GetString(2);
-        return new RoutineMetadata(schema, name, prokind == "p", proretset, rettype);
+        var pronargs = reader.GetInt16(3);
+        string[]? argNames = null;
+        if (!await reader.IsDBNullAsync(4, ct))
+        {
+            argNames = reader.GetFieldValue<string[]>(4);
+        }
+
+        var supportsNamed = argNames != null
+                            && pronargs > 0
+                            && argNames.Length >= pronargs
+                            && argNames.Take(pronargs).All(static n => !string.IsNullOrWhiteSpace(n));
+
+        return new RoutineMetadata(schema, name, prokind == 'p', proretset, rettype, supportsNamed);
     }
 
-    private readonly record struct RoutineMetadata(string Schema, string Name, bool IsProcedure, bool ReturnsSet, string ReturnType)
+    private readonly record struct RoutineMetadata(string Schema, string Name, bool IsProcedure, bool ReturnsSet, string ReturnType, bool SupportsNamedArguments)
     {
         public bool ReturnsJson => string.Equals(ReturnType, "json", StringComparison.OrdinalIgnoreCase)
                                    || string.Equals(ReturnType, "jsonb", StringComparison.OrdinalIgnoreCase);

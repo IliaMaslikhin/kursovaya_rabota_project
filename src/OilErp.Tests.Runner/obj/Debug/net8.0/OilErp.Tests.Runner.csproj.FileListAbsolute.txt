@@ -19,3 +19,7 @@
 /Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Tests.Runner/obj/Debug/net8.0/OilErp.Tests.Runner.pdb
 /Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Tests.Runner/obj/Debug/net8.0/OilErp.Tests.Runner.genruntimeconfig.cache
 /Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Tests.Runner/obj/Debug/net8.0/ref/OilErp.Tests.Runner.dll
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Tests.Runner/bin/Debug/net8.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Tests.Runner/bin/Debug/net8.0/Microsoft.Extensions.Logging.Abstractions.dll
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Tests.Runner/bin/Debug/net8.0/Npgsql.dll
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Tests.Runner/bin/Debug/net8.0/System.Diagnostics.DiagnosticSource.dll

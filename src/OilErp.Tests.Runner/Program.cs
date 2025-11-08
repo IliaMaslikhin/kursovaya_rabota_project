@@ -28,7 +28,7 @@ class Program
             return;
         }
 
-        Console.WriteLine("OilErp Extended Smoke Tests");
+        Console.WriteLine("Расширенные смоук-тесты OilErp");
         Console.WriteLine("============================");
         Console.WriteLine();
 
@@ -39,35 +39,129 @@ class Program
         var asyncSmoke = new AsyncSmokeTests();
         var validationSmoke = new ValidationSmokeTests();
 
-        // Register all test scenarios
-        runner.Register("Kernel_Creates", kernelSmoke.TestKernelCreates);
-        runner.Register("Kernel_Exposes_Storage", kernelSmoke.TestKernelExposesStorage);
-        runner.Register("Storage_Event_Subscribe_Unsubscribe_NoThrow", storageSmoke.TestStorageSubscribeNotifications);
-        runner.Register("Db_Query_TopByCr", storageSmoke.TestDbQueryTopByCr);
-        runner.Register("Db_Command_Enqueue", storageSmoke.TestDbCommandEnqueue);
-        runner.Register("QuerySpec_EmptyParameters_Allowed", extendedSmoke.TestQuerySpecEmptyParametersAllowed);
-        runner.Register("CommandSpec_EmptyParameters_Allowed", extendedSmoke.TestCommandSpecEmptyParametersAllowed);
-        runner.Register("OperationNames_Unique_And_NonEmpty", extendedSmoke.TestOperationNamesUniqueAndNonEmpty);
-        runner.Register("MeasurementPointDto_Constructs_With_Valid_Data", extendedSmoke.TestMeasurementPointDtoConstructsWithValidData);
-        runner.Register("IStoragePort_BeginTransaction_Returns_Disposable", extendedSmoke.TestIStoragePortBeginTransactionReturnsDisposable);
-        runner.Register("Transaction_Commit_Path_Sets_Flag", extendedSmoke.TestTransactionCommitPathSetsFlag);
-        runner.Register("Transaction_Rollback_Path_Sets_Flag", extendedSmoke.TestTransactionRollbackPathSetsFlag);
-        runner.Register("Transaction_Rollback_Twice_NoThrow", extendedSmoke.TestTransactionRollbackTwiceNoThrow);
-        runner.Register("Transaction_Commit_After_Rollback_Throws", extendedSmoke.TestTransactionCommitAfterRollbackThrows);
-        runner.Register("CancellationToken_Propagates_To_Query", asyncSmoke.TestCancellationTokenPropagatesToQuery);
-        runner.Register("CancellationToken_Propagates_To_Command", asyncSmoke.TestCancellationTokenPropagatesToCommand);
-        runner.Register("Timeout_On_Query_Is_Observed_By_Adapter", asyncSmoke.TestTimeoutOnQueryIsObservedByAdapter);
-        runner.Register("Timeout_On_Command_Is_Observed_By_Adapter", asyncSmoke.TestTimeoutOnCommandIsObservedByAdapter);
-        runner.Register("Db_Cancellation_On_Query", asyncSmoke.TestDbCancellationOnQuery);
-        runner.Register("Db_Timeout_On_Query", asyncSmoke.TestDbTimeoutOnQuery);
-        runner.Register("Concurrent_Commands_Counter_Is_Accurate", asyncSmoke.TestConcurrentCommandsCounterIsAccurate);
-        runner.Register("Event_Raise_Notified_Delivers_Payload", asyncSmoke.TestEventRaiseNotifiedDeliversPayload);
-        runner.Register("NotImplemented_Adapter_Methods_Fail_As_Expected", asyncSmoke.TestNotImplementedAdapterMethodsFailAsExpected);
-        runner.Register("Spec_Null_OperationName_Throws_Argument", validationSmoke.TestSpecNullOperationNameThrowsArgument);
-        runner.Register("Nested_Savepoint_Emulation_Commit_Then_Rollback_Outer", validationSmoke.TestNestedSavepointEmulationCommitThenRollbackOuter);
-        runner.Register("Repeated_Same_Command_Idempotent_In_Fake", validationSmoke.TestRepeatedSameCommandIdempotentInFake);
-        runner.Register("Query_Then_Command_Ordering_Captured", validationSmoke.TestQueryThenCommandOrderingCaptured);
-        runner.Register("Runner_Summary_Prints_Total_Count", validationSmoke.TestRunnerSummaryPrintsTotalCount);
+        const string CategoryConnection = "Подключение к базе";
+        const string CategoryIngestion = "Загрузка и очередь";
+        const string CategoryAnalytics = "Аналитика и отчёты";
+        const string CategoryReliability = "Надёжность и асинхронность";
+        const string CategoryValidation = "Валидация окружения";
+
+        void RegisterScenario(string name, string category, string title, string successHint, string failureHint, TestScenario scenario) =>
+            runner.Register(new TestScenarioDefinition(name, category, title, successHint, failureHint, scenario));
+
+        // Подключение
+        RegisterScenario(
+            "Kernel_Opens_Connection",
+            CategoryConnection,
+            "Проверка подключения ядра",
+            "Соединение с PostgreSQL установлено",
+            "Нет соединения с базой",
+            kernelSmoke.TestKernelOpensConnection);
+        RegisterScenario(
+            "Kernel_Executes_Health_Query",
+            CategoryConnection,
+            "Health-запрос через ядро",
+            "Health-запрос отработал",
+            "Health-запрос через ядро не выполняется",
+            kernelSmoke.TestKernelExecutesHealthQuery);
+        RegisterScenario(
+            "Kernel_Transaction_Lifecycle",
+            CategoryConnection,
+            "Цикл транзакций ядра",
+            "Begin/commit/rollback работают",
+            "Транзакции ядра не выполняются",
+            kernelSmoke.TestKernelTransactionLifecycle);
+
+        // Загрузка и очередь
+        RegisterScenario(
+            "Central_Bulk_Data_Seed_And_Analytics",
+            CategoryIngestion,
+            "Массовая загрузка и аналитика",
+            "Посев данных и аналитика завершены",
+            "Конвейер загрузки/аналитики не завершён",
+            storageSmoke.TestCentralBulkDataSeedAndAnalytics);
+        RegisterScenario(
+            "Central_Event_Queue_Integrity",
+            CategoryIngestion,
+            "Очередь событий после загрузки",
+            "Очередь очищена",
+            "В очереди остались события",
+            storageSmoke.TestCentralEventQueueIntegrity);
+
+        // Аналитика и отчёты
+        RegisterScenario(
+            "CalcCr_Function_Matches_Local",
+            CategoryAnalytics,
+            "Расчёт скорости коррозии",
+            "CR соответствует эталонной формуле",
+            "CR расходится с эталоном",
+            extendedSmoke.TestCalcCrFunctionMatchesLocalFormula);
+        RegisterScenario(
+            "EvalRisk_Levels_Align_With_Policy",
+            CategoryAnalytics,
+            "Соответствие уровней риска",
+            "Риски соответствуют политике",
+            "Риски не совпадают с политикой",
+            extendedSmoke.TestEvalRiskLevelsAlignWithPolicy);
+        RegisterScenario(
+            "Asset_Summary_Json_Completeness",
+            CategoryAnalytics,
+            "JSON-сводка актива",
+            "Сводка содержит необходимые блоки",
+            "JSON-сводка неполная",
+            extendedSmoke.TestAssetSummaryJsonCompleteness);
+
+        // Надёжность и асинхронность
+        RegisterScenario(
+            "Db_Cancellation_On_PgSleep",
+            CategoryReliability,
+            "Отмена долгого запроса",
+            "pg_sleep отменён по токену отмены",
+            "Отмена долгого запроса не сработала",
+            asyncSmoke.TestDbCancellationOnPgSleep);
+        RegisterScenario(
+            "Db_Timeout_On_PgSleep",
+            CategoryReliability,
+            "Таймаут долгого запроса",
+            "Сработал таймаут выполнения команды",
+            "Таймаут не сработал",
+            asyncSmoke.TestDbTimeoutOnPgSleep);
+        RegisterScenario(
+            "Fake_Concurrent_Commands_Counter",
+            CategoryReliability,
+            "Счётчик параллельных команд",
+            "Фейковый порт считает параллельные вызовы",
+            "Счётчик параллельных команд некорректен",
+            asyncSmoke.TestFakeStorageConcurrentCommandsCounter);
+        RegisterScenario(
+            "Fake_Storage_Notification_Broadcast",
+            CategoryReliability,
+            "Рассылка уведомлений фейкового хранилища",
+            "Подписчики получают уведомления",
+            "Уведомления не доставляются подписчикам",
+            asyncSmoke.TestFakeStorageNotificationBroadcast);
+
+        // Валидация окружения
+        RegisterScenario(
+            "Database_Inventory_Matches_Expectations",
+            CategoryValidation,
+            "Полнота объектной схемы",
+            "Все обязательные объекты присутствуют",
+            "Отсутствуют обязательные объекты",
+            validationSmoke.TestDatabaseInventoryMatchesExpectations);
+        RegisterScenario(
+            "Connection_Profile_Detected",
+            CategoryValidation,
+            "Определение профиля подключения",
+            "Профиль базы распознан",
+            "Не удалось определить профиль базы",
+            validationSmoke.TestConnectionProfileDetected);
+        RegisterScenario(
+            "Missing_Object_Reminder_Formatting",
+            CategoryValidation,
+            "Шаблон напоминания о недостающих объектах",
+            "Формат напоминания соответствует требованиям",
+            "Шаблон напоминания некорректен",
+            validationSmoke.TestMissingObjectReminderFormatting);
 
         await runner.RunAndPrintAsync();
     }
@@ -105,7 +199,7 @@ class Program
         }
         if (string.IsNullOrWhiteSpace(channel))
         {
-            Console.WriteLine("err: --channel is required");
+            Console.WriteLine("ошибка: --channel is required");
             return false;
         }
 
@@ -115,14 +209,14 @@ class Program
 
         void OnNotified(object? sender, OilErp.Core.Dto.DbNotification n)
         {
-            Console.WriteLine($"pid={n.ProcessId} channel={n.Channel} payload={n.Payload}");
+            Console.WriteLine($"pid={n.ProcessId} канал={n.Channel} данные={n.Payload}");
         }
 
         try
         {
             kernel.Storage.Notified += OnNotified;
             await sa.SubscribeAsync(channel, CancellationToken.None);
-            Console.WriteLine($"watching channel '{channel}' for {timeoutSec}s ...");
+            Console.WriteLine($"Следим за каналом '{channel}' в течение {timeoutSec} с...");
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, cts.Token);
@@ -132,7 +226,7 @@ class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"err: {ex.Message}");
+            Console.WriteLine($"ошибка: {ex.Message}");
             return false;
         }
         finally
@@ -142,47 +236,9 @@ class Program
         }
     }
 
-    private static KernelAdapter CreateKernel()
-    {
-        var cfg = LoadStorageConfig();
-        var storage = new StorageAdapter(cfg);
-        return new KernelAdapter(storage);
-    }
+    private static KernelAdapter CreateKernel() => TestEnvironment.CreateKernel();
 
-    private static StorageConfig LoadStorageConfig()
-    {
-        // ENV: OILERP__DB__CONN, OILERP__DB__TIMEOUT_SEC
-        var conn = Environment.GetEnvironmentVariable("OILERP__DB__CONN");
-        var timeoutStr = Environment.GetEnvironmentVariable("OILERP__DB__TIMEOUT_SEC");
-        if (!string.IsNullOrWhiteSpace(conn))
-        {
-            var t = int.TryParse(timeoutStr, out var ti) ? ti : 30;
-            return new StorageConfig(conn!, t);
-        }
-
-        // Files: appsettings.Development.json or appsettings.json (optional)
-        foreach (var name in new[] { "appsettings.Development.json", "appsettings.json" })
-        {
-            try
-            {
-                var path = Path.Combine(AppContext.BaseDirectory, name);
-                if (!File.Exists(path)) continue;
-                using var fs = File.OpenRead(path);
-                using var doc = JsonDocument.Parse(fs);
-                if (doc.RootElement.TryGetProperty("OILERP", out var oilerp)
-                    && oilerp.TryGetProperty("DB", out var db))
-                {
-                    var c = db.TryGetProperty("CONN", out var cEl) ? cEl.GetString() : null;
-                    var ts = db.TryGetProperty("TIMEOUT_SEC", out var tEl) ? tEl.GetInt32() : 30;
-                    if (!string.IsNullOrWhiteSpace(c)) return new StorageConfig(c!, ts);
-                }
-            }
-            catch { }
-        }
-
-        // Fallback defaults for local dev
-        return new StorageConfig("Host=localhost;Username=postgres;Password=postgres;Database=postgres", 30);
-    }
+    private static StorageConfig LoadStorageConfig() => TestEnvironment.LoadStorageConfig();
     private static async Task<bool> HandleCliAsync(string[] args)
     {
         // Simple subcommand parser
@@ -221,18 +277,18 @@ class Program
 
     private static void PrintUsage()
     {
-        Console.WriteLine("Usage:");
-        Console.WriteLine("  add-asset --id <text> --name <text> --plant <text>");
-        Console.WriteLine("  add-measurements-anpz --file <path csv|json>");
+        Console.WriteLine("Использование:");
+        Console.WriteLine("  add-asset --id <текст> --name <текст> --plant <текст>");
+        Console.WriteLine("  add-measurements-anpz --file <путь csv|json>");
         Console.WriteLine("  events-peek --limit <N>");
         Console.WriteLine("  events-ingest --max <N>");
         Console.WriteLine("  events-requeue --age-sec <N>");
         Console.WriteLine("  events-cleanup --age-sec <N>");
-        Console.WriteLine("  summary --plant <text> [--asset <id>] [--policy <name>]");
-        Console.WriteLine("  top-by-cr --plant <text> --take <N>");
-        Console.WriteLine("  eval-risk --asset <id> [--policy <name>]");
-        Console.WriteLine("  plant-cr --plant <text> --from <yyyy-mm-dd> --to <yyyy-mm-dd>");
-        Console.WriteLine("  watch --channel <text> [--timeout-sec <N>]");
+        Console.WriteLine("  summary --plant <текст> [--asset <id>] [--policy <имя>]");
+        Console.WriteLine("  top-by-cr --plant <текст> --take <N>");
+        Console.WriteLine("  eval-risk --asset <id> [--policy <имя>]");
+        Console.WriteLine("  plant-cr --plant <текст> --from <гггг-мм-дд> --to <гггг-мм-дд>");
+        Console.WriteLine("  watch --channel <текст> [--timeout-sec <N>]");
         Console.WriteLine();
     }
 
@@ -250,7 +306,7 @@ class Program
         }
         if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(plant))
         {
-            Console.WriteLine("err: missing required arguments. See --help");
+            Console.WriteLine("ошибка: missing required arguments. See --help");
             return false;
         }
 
@@ -259,12 +315,12 @@ class Program
             var kernel = CreateKernel();
             var svc = new FnAssetUpsertService(kernel.Storage);
             var rows = await svc.fn_asset_upsertAsync(id!, name!, null, plant!, CancellationToken.None);
-            Console.WriteLine($"ok: rows={rows}");
+            Console.WriteLine($"ок: строк={rows}");
             return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"err: {ex.Message}");
+            Console.WriteLine($"ошибка: {ex.Message}");
             return false;
         }
     }
@@ -280,7 +336,7 @@ class Program
         }
         if (string.IsNullOrWhiteSpace(file) || !File.Exists(file))
         {
-            Console.WriteLine("err: --file is required and must exist");
+            Console.WriteLine("ошибка: --file is required and must exist");
             return false;
         }
 
@@ -354,12 +410,12 @@ class Program
             var snippet = pointsJson.ValueKind == JsonValueKind.Array && pointsJson.GetArrayLength() > 0
                 ? pointsJson[0].ToString()
                 : "[]";
-            Console.WriteLine($"ok: rows={rows} json={Truncate(snippet, 200)}");
+            Console.WriteLine($"ок: строк={rows} json={Truncate(snippet, 200)}");
             return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"err: {ex.Message}");
+            Console.WriteLine($"ошибка: {ex.Message}");
             return false;
         }
     }
@@ -404,7 +460,7 @@ class Program
 
         if (string.IsNullOrWhiteSpace(asset))
         {
-            Console.WriteLine("err: --asset is required (SQL requires asset_code). --plant is currently informational only.");
+            Console.WriteLine("ошибка: --asset is required (SQL requires asset_code). --plant is currently informational only.");
             return false;
         }
 
@@ -415,36 +471,36 @@ class Program
             var dto = await svc.fn_asset_summary_jsonAsync(asset!, string.IsNullOrWhiteSpace(policy) ? null : policy, CancellationToken.None);
             if (dto == null)
             {
-                Console.WriteLine("ok: empty");
+                Console.WriteLine("ок: пусто");
                 return true;
             }
             // Render table from DTO
-            Console.WriteLine("ok:");
-            Console.WriteLine($"asset_code: {dto.Asset.AssetCode}");
-            Console.WriteLine($"name:       {dto.Asset.Name}");
-            Console.WriteLine($"type:       {dto.Asset.Type}");
-            Console.WriteLine($"plant_code: {dto.Asset.PlantCode}");
+            Console.WriteLine("ок:");
+            Console.WriteLine($"код актива:  {dto.Asset.AssetCode}");
+            Console.WriteLine($"название:    {dto.Asset.Name}");
+            Console.WriteLine($"тип:         {dto.Asset.Type}");
+            Console.WriteLine($"код завода:  {dto.Asset.PlantCode}");
             if (dto.Analytics is not null)
             {
-                Console.WriteLine($"prev_thk:   {dto.Analytics.PrevThk}");
-                Console.WriteLine($"prev_date:  {dto.Analytics.PrevDate:O}");
-                Console.WriteLine($"last_thk:   {dto.Analytics.LastThk}");
-                Console.WriteLine($"last_date:  {dto.Analytics.LastDate:O}");
-                Console.WriteLine($"cr:         {dto.Analytics.Cr}");
-                Console.WriteLine($"updated_at: {dto.Analytics.UpdatedAt:O}");
+                Console.WriteLine($"пред. толщина: {dto.Analytics.PrevThk}");
+                Console.WriteLine($"пред. дата:    {dto.Analytics.PrevDate:O}");
+                Console.WriteLine($"посл. толщина: {dto.Analytics.LastThk}");
+                Console.WriteLine($"посл. дата:    {dto.Analytics.LastDate:O}");
+                Console.WriteLine($"CR:            {dto.Analytics.Cr}");
+                Console.WriteLine($"обновлено:     {dto.Analytics.UpdatedAt:O}");
             }
             if (dto.Risk is not null)
             {
-                Console.WriteLine($"risk.level: {dto.Risk.Level}");
-                Console.WriteLine($"risk.low:   {dto.Risk.ThresholdLow}");
-                Console.WriteLine($"risk.med:   {dto.Risk.ThresholdMed}");
-                Console.WriteLine($"risk.high:  {dto.Risk.ThresholdHigh}");
+                Console.WriteLine($"уровень риска:  {dto.Risk.Level}");
+                Console.WriteLine($"порог LOW:      {dto.Risk.ThresholdLow}");
+                Console.WriteLine($"порог MED:      {dto.Risk.ThresholdMed}");
+                Console.WriteLine($"порог HIGH:     {dto.Risk.ThresholdHigh}");
             }
             return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"err: {ex.Message}");
+            Console.WriteLine($"ошибка: {ex.Message}");
             return false;
         }
     }
@@ -465,7 +521,7 @@ class Program
             var kernel = CreateKernel();
             var svc = new FnTopAssetsByCrService(kernel.Storage);
             var rows = await svc.fn_top_assets_by_crAsync(take, CancellationToken.None);
-            Console.WriteLine($"ok: rows={rows.Count}");
+            Console.WriteLine($"ок: строк={rows.Count}");
             // Render table
             if (rows.Count > 0)
             {
@@ -475,7 +531,7 @@ class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"err: {ex.Message}");
+            Console.WriteLine($"ошибка: {ex.Message}");
             return false;
         }
     }
@@ -493,7 +549,7 @@ class Program
         }
         if (string.IsNullOrWhiteSpace(asset))
         {
-            Console.WriteLine("err: --asset is required");
+            Console.WriteLine("ошибка: --asset is required");
             return false;
         }
         try
@@ -501,7 +557,7 @@ class Program
             var kernel = CreateKernel();
             var svc = new FnEvalRiskService(kernel.Storage);
             var rows = await svc.fn_eval_riskAsync(asset!, string.IsNullOrWhiteSpace(policy) ? null : policy, CancellationToken.None);
-            Console.WriteLine($"ok: rows={rows.Count}");
+            Console.WriteLine($"ок: строк={rows.Count}");
             if (rows.Count > 0)
             {
                 PrintTable(rows, new[] { "asset_code", "cr", "level", "threshold_low", "threshold_med", "threshold_high" });
@@ -510,7 +566,7 @@ class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"err: {ex.Message}");
+            Console.WriteLine($"ошибка: {ex.Message}");
             return false;
         }
     }
@@ -519,7 +575,7 @@ class Program
     {
         if (rows.Count == 0)
         {
-            Console.WriteLine("(empty)");
+            Console.WriteLine("(пусто)");
             return;
         }
 
@@ -581,17 +637,17 @@ class Program
         }
         if (string.IsNullOrWhiteSpace(plant) || string.IsNullOrWhiteSpace(fromStr) || string.IsNullOrWhiteSpace(toStr))
         {
-            Console.WriteLine("err: --plant, --from, --to are required");
+            Console.WriteLine("ошибка: --plant, --from, --to are required");
             return false;
         }
         if (!DateTime.TryParse(fromStr, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var from))
         {
-            Console.WriteLine("err: invalid --from");
+            Console.WriteLine("ошибка: invalid --from");
             return false;
         }
         if (!DateTime.TryParse(toStr, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var to))
         {
-            Console.WriteLine("err: invalid --to");
+            Console.WriteLine("ошибка: invalid --to");
             return false;
         }
         try
@@ -599,18 +655,18 @@ class Program
             var kernel = CreateKernel();
             var svc = new PlantCrService(kernel.Storage);
             var dto = await svc.GetPlantCrAsync(plant!, from, to, CancellationToken.None);
-            Console.WriteLine("ok:");
-            Console.WriteLine($"plant: {dto.Plant}");
-            Console.WriteLine($"from:  {dto.From:O}");
-            Console.WriteLine($"to:    {dto.To:O}");
-            Console.WriteLine($"cr_mean: {dto.CrMean}");
-            Console.WriteLine($"cr_p90:  {dto.CrP90}");
-            Console.WriteLine($"assets_considered: {dto.AssetsConsidered}");
+            Console.WriteLine("ок:");
+            Console.WriteLine($"завод:            {dto.Plant}");
+            Console.WriteLine($"интервал с:       {dto.From:O}");
+            Console.WriteLine($"интервал по:      {dto.To:O}");
+            Console.WriteLine($"CR (среднее):     {dto.CrMean}");
+            Console.WriteLine($"CR (P90):         {dto.CrP90}");
+            Console.WriteLine($"активов учтено:   {dto.AssetsConsidered}");
             return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"err: {ex.Message}");
+            Console.WriteLine($"ошибка: {ex.Message}");
             return false;
         }
     }
@@ -627,7 +683,7 @@ class Program
         {
             var svc = new FnEventsPeekService(kernel.Storage);
             var rows = await svc.fn_events_peekAsync(limit, CancellationToken.None);
-            Console.WriteLine($"ok: rows={rows.Count}");
+            Console.WriteLine($"ок: строк={rows.Count}");
             if (rows.Count > 0)
             {
                 var first = JsonSerializer.Serialize(rows[0]);
@@ -638,7 +694,7 @@ class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"err: {ex.Message}");
+            Console.WriteLine($"ошибка: {ex.Message}");
             return false;
         }
     }
@@ -655,13 +711,13 @@ class Program
         {
             var svc = new FnIngestEventsService(kernel.Storage);
             var affected = await svc.fn_ingest_eventsAsync(max, CancellationToken.None);
-            Console.WriteLine($"ok: rows={affected}");
+            Console.WriteLine($"ок: строк={affected}");
             await CommitTxAsync(tx);
             return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"err: {ex.Message}");
+            Console.WriteLine($"ошибка: {ex.Message}");
             return false;
         }
     }
@@ -687,13 +743,13 @@ class Program
 
             var svc = new FnEventsRequeueService(kernel.Storage);
             var affected = await svc.fn_events_requeueAsync(ids, CancellationToken.None);
-            Console.WriteLine($"ok: rows={affected} ids={ids.Length}");
+            Console.WriteLine($"ок: строк={affected} ids={ids.Length}");
             await CommitTxAsync(tx);
             return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"err: {ex.Message}");
+            Console.WriteLine($"ошибка: {ex.Message}");
             return false;
         }
     }
@@ -710,14 +766,83 @@ class Program
         {
             var svc = new FnEventsCleanupService(kernel.Storage);
             var affected = await svc.fn_events_cleanupAsync(TimeSpan.FromSeconds(ageSec), CancellationToken.None);
-            Console.WriteLine($"ok: rows={affected}");
+            Console.WriteLine($"ок: строк={affected}");
             await CommitTxAsync(tx);
             return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"err: {ex.Message}");
+            Console.WriteLine($"ошибка: {ex.Message}");
             return false;
         }
+    }
+}
+
+internal static class TestEnvironment
+{
+    private static readonly object SyncRoot = new();
+    private static StorageConfig? _cachedConfig;
+
+    public static StorageConfig LoadStorageConfig()
+    {
+        if (_cachedConfig != null) return _cachedConfig;
+        lock (SyncRoot)
+        {
+            if (_cachedConfig != null) return _cachedConfig;
+
+            var resolved = ResolveFromEnvironment()
+                           ?? ResolveFromAppSettings()
+                           ?? new StorageConfig("Host=localhost;Username=postgres;Password=postgres;Database=postgres", 30);
+
+            _cachedConfig = resolved;
+            return resolved;
+        }
+    }
+
+    public static KernelAdapter CreateKernel()
+    {
+        var storage = CreateStorageAdapter();
+        return new KernelAdapter(storage);
+    }
+
+    public static StorageAdapter CreateStorageAdapter() => new StorageAdapter(LoadStorageConfig());
+
+    public static string ConnectionString => LoadStorageConfig().ConnectionString;
+
+    private static StorageConfig? ResolveFromEnvironment()
+    {
+        var conn = Environment.GetEnvironmentVariable("OILERP__DB__CONN");
+        if (string.IsNullOrWhiteSpace(conn)) return null;
+        var timeoutStr = Environment.GetEnvironmentVariable("OILERP__DB__TIMEOUT_SEC");
+        var timeout = int.TryParse(timeoutStr, out var ti) ? ti : 30;
+        return new StorageConfig(conn!, timeout);
+    }
+
+    private static StorageConfig? ResolveFromAppSettings()
+    {
+        foreach (var name in new[] { "appsettings.Development.json", "appsettings.json" })
+        {
+            try
+            {
+                var path = Path.Combine(AppContext.BaseDirectory, name);
+                if (!File.Exists(path)) continue;
+                using var fs = File.OpenRead(path);
+                using var doc = JsonDocument.Parse(fs);
+                if (doc.RootElement.TryGetProperty("OILERP", out var oilerp)
+                    && oilerp.TryGetProperty("DB", out var db))
+                {
+                    var conn = db.TryGetProperty("CONN", out var cEl) ? cEl.GetString() : null;
+                    var timeout = db.TryGetProperty("TIMEOUT_SEC", out var tEl) ? tEl.GetInt32() : 30;
+                    if (!string.IsNullOrWhiteSpace(conn))
+                        return new StorageConfig(conn!, timeout);
+                }
+            }
+            catch
+            {
+                // Swallow and fallback to defaults
+            }
+        }
+
+        return null;
     }
 }

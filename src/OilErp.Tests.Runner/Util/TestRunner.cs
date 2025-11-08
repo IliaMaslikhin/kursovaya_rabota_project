@@ -1,3 +1,5 @@
+using System.Linq;
+
 namespace OilErp.Tests.Runner.Util;
 
 /// <summary>
@@ -17,38 +19,46 @@ public delegate Task<TestResult> TestScenario();
 /// <summary>
 /// Test runner harness for registering and running named scenarios
 /// </summary>
+public record TestScenarioDefinition(
+    string Name,
+    string Category,
+    string Title,
+    string SuccessHint,
+    string FailureHint,
+    TestScenario Scenario);
+
+/// <summary>
+/// Test runner harness for registering and running named scenarios
+/// </summary>
 public class TestRunner
 {
-    private readonly List<(string Name, TestScenario Scenario)> _scenarios = new();
+    private readonly List<TestScenarioDefinition> _scenarios = new();
 
     /// <summary>
     /// Registers a test scenario
     /// </summary>
     /// <param name="name">Scenario name</param>
     /// <param name="scenario">Scenario implementation</param>
-    public void Register(string name, TestScenario scenario)
-    {
-        _scenarios.Add((name, scenario));
-    }
+    public void Register(TestScenarioDefinition definition) => _scenarios.Add(definition);
 
     /// <summary>
     /// Runs all registered scenarios
     /// </summary>
     /// <returns>Collection of test results</returns>
-    public async Task<IReadOnlyList<TestResult>> RunAllAsync()
+    public async Task<IReadOnlyList<(TestScenarioDefinition Definition, TestResult Result)>> RunAllAsync()
     {
-        var results = new List<TestResult>();
+        var results = new List<(TestScenarioDefinition, TestResult)>(_scenarios.Count);
 
-        foreach (var (name, scenario) in _scenarios)
+        foreach (var definition in _scenarios)
         {
             try
             {
-                var result = await scenario();
-                results.Add(result);
+                var result = await definition.Scenario();
+                results.Add((definition, result));
             }
             catch (Exception ex)
             {
-                results.Add(new TestResult(name, false, ex.Message));
+                results.Add((definition, new TestResult(definition.Name, false, ex.Message)));
             }
         }
 
@@ -60,22 +70,45 @@ public class TestRunner
     /// </summary>
     public async Task RunAndPrintAsync()
     {
-        Console.WriteLine($"Running {_scenarios.Count} test scenarios...");
+        Console.WriteLine($"Запуск {_scenarios.Count} сценариев...");
         Console.WriteLine();
 
         var results = await RunAllAsync();
+        var grouped = results
+            .GroupBy(r => r.Definition.Category, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var result in results)
+        foreach (var group in grouped)
         {
-            var status = result.Success ? "OK" : "FAIL";
-            var message = result.Success ? string.Empty : $" {result.Error}";
-            Console.WriteLine($"{result.Name}: {status}{message}");
+            Console.WriteLine($"Категория: {group.Key}");
+            foreach (var item in group)
+            {
+                var status = item.Result.Success ? "✅" : "❌";
+                var hint = item.Result.Success
+                    ? item.Definition.SuccessHint
+                    : $"{item.Definition.FailureHint}. Детали: {item.Result.Error}";
+                Console.WriteLine($"  {status} {item.Definition.Title} — {hint}");
+            }
+            Console.WriteLine();
         }
 
-        Console.WriteLine();
         var totalTests = results.Count;
-        var passedTests = results.Count(r => r.Success);
+        var passedTests = results.Count(r => r.Result.Success);
         var failedTests = totalTests - passedTests;
-        Console.WriteLine($"Summary: {passedTests}/{totalTests} tests passed, {failedTests} failed");
+        Console.WriteLine($"Итого: {passedTests}/{totalTests} тестов пройдено, {failedTests} не прошло");
+
+        Console.WriteLine();
+        Console.WriteLine("Интерпретация:");
+        if (failedTests == 0)
+        {
+            Console.WriteLine("- Все проверки пройдены — инфраструктура готова к работе.");
+        }
+        else
+        {
+            foreach (var item in results.Where(r => !r.Result.Success))
+            {
+                Console.WriteLine($"- {item.Definition.Title}: {item.Definition.FailureHint}. Причина: {item.Result.Error}");
+            }
+        }
     }
 }

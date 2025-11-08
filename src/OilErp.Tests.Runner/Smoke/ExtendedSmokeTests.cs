@@ -1,275 +1,252 @@
+using System.Globalization;
+using System.Linq;
+using System.Text.Json;
 using OilErp.Core.Dto;
 using OilErp.Core.Operations;
-using OilErp.Tests.Runner.TestDoubles;
+using OilErp.Tests.Runner;
 using OilErp.Tests.Runner.Util;
 
 namespace OilErp.Tests.Runner.Smoke;
 
 /// <summary>
-/// Extended smoke tests for comprehensive testing
+/// Extended smoke tests focused on analytical routines and JSON contracts.
 /// </summary>
 public class ExtendedSmokeTests
 {
     /// <summary>
-    /// Tests that QuerySpec allows empty parameters
+    /// Verifies that fn_calc_cr matches the local corrosion rate formula for known samples.
     /// </summary>
-    /// <returns>Test result</returns>
-    public Task<TestResult> TestQuerySpecEmptyParametersAllowed()
+    public async Task<TestResult> TestCalcCrFunctionMatchesLocalFormula()
     {
+        const string testName = "CalcCr_Function_Matches_Local";
         try
         {
-            var spec = new QuerySpec("test.operation", new Dictionary<string, object?>());
-            if (spec.Parameters.Count != 0)
+            var storage = TestEnvironment.CreateStorageAdapter();
+            var dataSet = HealthCheckDataSet.CreateDefault();
+            foreach (var seed in dataSet.Seeds)
             {
-                return Task.FromResult(new TestResult("QuerySpec_EmptyParameters_Allowed", false, "Parameters should be empty"));
+                var expected = CalculateCorrosionRate(seed);
+                var spec = new QuerySpec(
+                    OperationNames.Central.CalcCr,
+                    new Dictionary<string, object?>
+                    {
+                        ["prev_thk"] = seed.PrevThickness,
+                        ["prev_date"] = seed.PrevDateUtc,
+                        ["last_thk"] = seed.LastThickness,
+                        ["last_date"] = seed.LastDateUtc
+                    });
+
+                var rows = await storage.ExecuteQueryAsync<Dictionary<string, object?>>(spec);
+                var actual = ExtractDecimal(rows.FirstOrDefault(), "fn_calc_cr");
+                if (!IsClose(expected, actual))
+                {
+                    return new TestResult(testName, false, $"Asset {seed.AssetCode}: expected {expected:F4} actual {actual:F4}");
+                }
             }
-            return Task.FromResult(new TestResult("QuerySpec_EmptyParameters_Allowed", true));
+
+            return new TestResult(testName, true);
         }
         catch (Exception ex)
         {
-            return Task.FromResult(new TestResult("QuerySpec_EmptyParameters_Allowed", false, ex.Message));
+            return new TestResult(testName, false, ex.Message);
         }
     }
 
     /// <summary>
-    /// Tests that CommandSpec allows empty parameters
+    /// Ensures fn_eval_risk honors policy thresholds for each seeded asset.
     /// </summary>
-    /// <returns>Test result</returns>
-    public Task<TestResult> TestCommandSpecEmptyParametersAllowed()
+    public async Task<TestResult> TestEvalRiskLevelsAlignWithPolicy()
     {
+        const string testName = "EvalRisk_Levels_Align_With_Policy";
         try
         {
-            var spec = new CommandSpec("test.operation", new Dictionary<string, object?>());
-            if (spec.Parameters.Count != 0)
+            var storage = TestEnvironment.CreateStorageAdapter();
+            var dataSet = HealthCheckDataSet.CreateDefault();
+            var scenario = new CentralHealthCheckScenario(storage, dataSet);
+            var snapshot = await scenario.SeedAsync(CancellationToken.None);
+
+            var errors = new List<string>();
+            foreach (var expectation in snapshot.Expectations)
             {
-                return Task.FromResult(new TestResult("CommandSpec_EmptyParameters_Allowed", false, "Parameters should be empty"));
+                var spec = new QuerySpec(
+                    OperationNames.Central.EvalRisk,
+                    new Dictionary<string, object?>
+                    {
+                        ["p_asset_code"] = expectation.Seed.AssetCode,
+                        ["p_policy_name"] = snapshot.PolicyName
+                    });
+
+                var rows = await storage.ExecuteQueryAsync<Dictionary<string, object?>>(spec);
+                var row = rows.FirstOrDefault();
+                if (row == null)
+                {
+                    errors.Add($"Asset {expectation.Seed.AssetCode}: fn_eval_risk returned no rows");
+                    continue;
+                }
+
+                var actualLevel = row.TryGetValue("level", out var level) ? level?.ToString() : null;
+                if (!string.Equals(actualLevel, expectation.ExpectedRiskLevel, StringComparison.OrdinalIgnoreCase))
+                {
+                    errors.Add($"Asset {expectation.Seed.AssetCode}: expected {expectation.ExpectedRiskLevel} but fn_eval_risk returned {actualLevel ?? "NULL"}");
+                }
+
+                if (!CheckThreshold(row, "threshold_low", dataSet.ThresholdLow) ||
+                    !CheckThreshold(row, "threshold_med", dataSet.ThresholdMed) ||
+                    !CheckThreshold(row, "threshold_high", dataSet.ThresholdHigh))
+                {
+                    errors.Add($"Asset {expectation.Seed.AssetCode}: threshold mismatch (expected {dataSet.ThresholdLow}/{dataSet.ThresholdMed}/{dataSet.ThresholdHigh})");
+                }
             }
-            return Task.FromResult(new TestResult("CommandSpec_EmptyParameters_Allowed", true));
+
+            if (errors.Count > 0)
+            {
+                return new TestResult(testName, false, string.Join("; ", errors));
+            }
+
+            return new TestResult(testName, true);
         }
         catch (Exception ex)
         {
-            return Task.FromResult(new TestResult("CommandSpec_EmptyParameters_Allowed", false, ex.Message));
+            return new TestResult(testName, false, ex.Message);
         }
     }
 
     /// <summary>
-    /// Tests that OperationNames are unique and non-empty
+    /// Confirms that fn_asset_summary_json returns all expected segments (asset, analytics, risk) for each asset.
     /// </summary>
-    /// <returns>Test result</returns>
-    public Task<TestResult> TestOperationNamesUniqueAndNonEmpty()
+    public async Task<TestResult> TestAssetSummaryJsonCompleteness()
     {
+        const string testName = "Asset_Summary_Json_Completeness";
         try
         {
-            var names = new[]
-            {
-                OperationNames.Plant.MeasurementsInsertBatch,
-                OperationNames.Central.EventsIngest,
-                OperationNames.Central.EventsCleanup,
-                OperationNames.Central.AnalyticsAssetSummary,
-                OperationNames.Central.AnalyticsTopAssetsByCr
-            };
+            var storage = TestEnvironment.CreateStorageAdapter();
+            var dataSet = HealthCheckDataSet.CreateDefault();
+            var scenario = new CentralHealthCheckScenario(storage, dataSet);
+            var snapshot = await scenario.SeedAsync(CancellationToken.None);
 
-            var uniqueNames = names.Distinct().ToArray();
-            if (uniqueNames.Length != names.Length)
+            var issues = new List<string>();
+            foreach (var expectation in snapshot.Expectations)
             {
-                return Task.FromResult(new TestResult("OperationNames_Unique_And_NonEmpty", false, "Operation names are not unique"));
+                var spec = new QuerySpec(
+                    OperationNames.Central.AnalyticsAssetSummary,
+                    new Dictionary<string, object?>
+                    {
+                        ["p_asset_code"] = expectation.Seed.AssetCode,
+                        ["p_policy_name"] = snapshot.PolicyName
+                    });
+
+                var rows = await storage.ExecuteQueryAsync<string>(spec);
+                var json = rows.FirstOrDefault();
+                if (string.IsNullOrWhiteSpace(json))
+                {
+                    issues.Add($"Asset {expectation.Seed.AssetCode}: summary json is empty");
+                    continue;
+                }
+
+                if (!ValidateSummary(json, expectation, out var validationError))
+                {
+                    issues.Add($"Asset {expectation.Seed.AssetCode}: {validationError}");
+                }
+
+                Console.WriteLine($"[JSON сводки] {expectation.Seed.AssetCode}: {json}");
             }
 
-            if (names.Any(string.IsNullOrEmpty))
+            if (issues.Count > 0)
             {
-                return Task.FromResult(new TestResult("OperationNames_Unique_And_NonEmpty", false, "Some operation names are empty"));
+                return new TestResult(testName, false, string.Join("; ", issues));
             }
 
-            return Task.FromResult(new TestResult("OperationNames_Unique_And_NonEmpty", true));
+            return new TestResult(testName, true);
         }
         catch (Exception ex)
         {
-            return Task.FromResult(new TestResult("OperationNames_Unique_And_NonEmpty", false, ex.Message));
+            return new TestResult(testName, false, ex.Message);
         }
     }
 
-    /// <summary>
-    /// Tests that MeasurementPointDto constructs with valid data
-    /// </summary>
-    /// <returns>Test result</returns>
-    public Task<TestResult> TestMeasurementPointDtoConstructsWithValidData()
+    private static bool ValidateSummary(string json, AssetExpectation expectation, out string error)
     {
-        try
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        if (!root.TryGetProperty("asset", out var asset) || !asset.TryGetProperty("asset_code", out var assetCodeProp))
         {
-            var dto = new MeasurementPointDto("Point1", DateTime.UtcNow, 10.5m, "Test note");
-            
-            if (dto.Label != "Point1")
-            {
-                return Task.FromResult(new TestResult("MeasurementPointDto_Constructs_With_Valid_Data", false, "Label not set correctly"));
-            }
-            
-            if (dto.Thickness != 10.5m)
-            {
-                return Task.FromResult(new TestResult("MeasurementPointDto_Constructs_With_Valid_Data", false, "Thickness not set correctly"));
-            }
-            
-            if (dto.Note != "Test note")
-            {
-                return Task.FromResult(new TestResult("MeasurementPointDto_Constructs_With_Valid_Data", false, "Note not set correctly"));
-            }
+            error = "asset block missing";
+            return false;
+        }
 
-            return Task.FromResult(new TestResult("MeasurementPointDto_Constructs_With_Valid_Data", true));
-        }
-        catch (Exception ex)
+        var assetCode = assetCodeProp.GetString();
+        if (!string.Equals(assetCode, expectation.Seed.AssetCode, StringComparison.Ordinal))
         {
-            return Task.FromResult(new TestResult("MeasurementPointDto_Constructs_With_Valid_Data", false, ex.Message));
+            error = $"asset_code mismatch (expected {expectation.Seed.AssetCode}, got {assetCode})";
+            return false;
         }
+
+        if (!root.TryGetProperty("analytics", out var analytics))
+        {
+            error = "analytics block missing";
+            return false;
+        }
+
+        var lastThk = analytics.TryGetProperty("last_thk", out var lastThkEl) ? lastThkEl.GetDecimal() : (decimal?)null;
+        if (lastThk == null || Math.Abs(lastThk.Value - expectation.Seed.LastThickness) > 0.0001m)
+        {
+            error = "analytics.last_thk mismatch";
+            return false;
+        }
+
+        if (!root.TryGetProperty("risk", out var risk) || !risk.TryGetProperty("level", out var riskLevelProp))
+        {
+            error = "risk block missing";
+            return false;
+        }
+
+        var riskLevel = riskLevelProp.GetString();
+        if (!string.Equals(riskLevel, expectation.ExpectedRiskLevel, StringComparison.OrdinalIgnoreCase))
+        {
+            error = $"risk level mismatch (expected {expectation.ExpectedRiskLevel}, got {riskLevel})";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
     }
 
-    /// <summary>
-    /// Tests that IStoragePort BeginTransaction returns disposable
-    /// </summary>
-    /// <returns>Test result</returns>
-    public Task<TestResult> TestIStoragePortBeginTransactionReturnsDisposable()
+    private static decimal CalculateCorrosionRate(AssetMeasurementSeed seed)
     {
-        try
-        {
-            var storage = new FakeStoragePort();
-            var transaction = storage.BeginTransactionAsync().Result;
-            
-            if (transaction == null)
-            {
-                return Task.FromResult(new TestResult("IStoragePort_BeginTransaction_Returns_Disposable", false, "Transaction is null"));
-            }
-            
-            if (transaction is not IAsyncDisposable)
-            {
-                return Task.FromResult(new TestResult("IStoragePort_BeginTransaction_Returns_Disposable", false, "Transaction is not IAsyncDisposable"));
-            }
-
-            return Task.FromResult(new TestResult("IStoragePort_BeginTransaction_Returns_Disposable", true));
-        }
-        catch (Exception ex)
-        {
-            return Task.FromResult(new TestResult("IStoragePort_BeginTransaction_Returns_Disposable", false, ex.Message));
-        }
+        var span = seed.LastDateUtc - seed.PrevDateUtc;
+        var days = (decimal)Math.Max(1.0, span.TotalDays);
+        var delta = seed.PrevThickness - seed.LastThickness;
+        return decimal.Round(delta / days, 6, MidpointRounding.AwayFromZero);
     }
 
-    /// <summary>
-    /// Tests transaction commit path sets flag
-    /// </summary>
-    /// <returns>Test result</returns>
-    public Task<TestResult> TestTransactionCommitPathSetsFlag()
+    private static decimal ExtractDecimal(Dictionary<string, object?>? row, string column)
     {
-        try
-        {
-            var storage = new FakeStoragePort();
-            var transaction = storage.BeginTransactionAsync().Result as FakeTransaction;
-            
-            if (transaction == null)
-            {
-                return Task.FromResult(new TestResult("Transaction_Commit_Path_Sets_Flag", false, "Transaction is not FakeTransaction"));
-            }
-            
-            transaction.Commit();
-            
-            if (!transaction.IsCommitted)
-            {
-                return Task.FromResult(new TestResult("Transaction_Commit_Path_Sets_Flag", false, "Commit flag not set"));
-            }
+        if (row == null || !row.TryGetValue(column, out var value))
+            throw new InvalidOperationException($"Column {column} not found in fn_calc_cr result");
 
-            return Task.FromResult(new TestResult("Transaction_Commit_Path_Sets_Flag", true));
-        }
-        catch (Exception ex)
+        return value switch
         {
-            return Task.FromResult(new TestResult("Transaction_Commit_Path_Sets_Flag", false, ex.Message));
-        }
+            decimal d => d,
+            double dbl => (decimal)dbl,
+            float fl => (decimal)fl,
+            int i => i,
+            long l => l,
+            string s when decimal.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) => parsed,
+            _ => throw new InvalidOperationException($"Cannot convert {column} value '{value}' to decimal")
+        };
     }
 
-    /// <summary>
-    /// Tests transaction rollback path sets flag
-    /// </summary>
-    /// <returns>Test result</returns>
-    public Task<TestResult> TestTransactionRollbackPathSetsFlag()
+    private static bool CheckThreshold(Dictionary<string, object?> row, string column, decimal expected)
     {
-        try
+        if (!row.TryGetValue(column, out var value) || value == null)
         {
-            var storage = new FakeStoragePort();
-            var transaction = storage.BeginTransactionAsync().Result as FakeTransaction;
-            
-            if (transaction == null)
-            {
-                return Task.FromResult(new TestResult("Transaction_Rollback_Path_Sets_Flag", false, "Transaction is not FakeTransaction"));
-            }
-            
-            transaction.Rollback();
-            
-            if (!transaction.IsRolledBack)
-            {
-                return Task.FromResult(new TestResult("Transaction_Rollback_Path_Sets_Flag", false, "Rollback flag not set"));
-            }
+            return false;
+        }
 
-            return Task.FromResult(new TestResult("Transaction_Rollback_Path_Sets_Flag", true));
-        }
-        catch (Exception ex)
-        {
-            return Task.FromResult(new TestResult("Transaction_Rollback_Path_Sets_Flag", false, ex.Message));
-        }
+        var actual = ExtractDecimal(row, column);
+        return Math.Abs(actual - expected) <= 0.0001m;
     }
 
-    /// <summary>
-    /// Tests that rolling back twice doesn't throw
-    /// </summary>
-    /// <returns>Test result</returns>
-    public Task<TestResult> TestTransactionRollbackTwiceNoThrow()
-    {
-        try
-        {
-            var storage = new FakeStoragePort();
-            var transaction = storage.BeginTransactionAsync().Result as FakeTransaction;
-            
-            if (transaction == null)
-            {
-                return Task.FromResult(new TestResult("Transaction_Rollback_Twice_NoThrow", false, "Transaction is not FakeTransaction"));
-            }
-            
-            transaction.Rollback();
-            transaction.Rollback(); // Should not throw
-
-            return Task.FromResult(new TestResult("Transaction_Rollback_Twice_NoThrow", true));
-        }
-        catch (Exception ex)
-        {
-            return Task.FromResult(new TestResult("Transaction_Rollback_Twice_NoThrow", false, ex.Message));
-        }
-    }
-
-    /// <summary>
-    /// Tests that committing after rollback throws
-    /// </summary>
-    /// <returns>Test result</returns>
-    public Task<TestResult> TestTransactionCommitAfterRollbackThrows()
-    {
-        try
-        {
-            var storage = new FakeStoragePort();
-            var transaction = storage.BeginTransactionAsync().Result as FakeTransaction;
-            
-            if (transaction == null)
-            {
-                return Task.FromResult(new TestResult("Transaction_Commit_After_Rollback_Throws", false, "Transaction is not FakeTransaction"));
-            }
-            
-            transaction.Rollback();
-            
-            try
-            {
-                transaction.Commit();
-                return Task.FromResult(new TestResult("Transaction_Commit_After_Rollback_Throws", false, "Commit after rollback should throw"));
-            }
-            catch (InvalidOperationException)
-            {
-                return Task.FromResult(new TestResult("Transaction_Commit_After_Rollback_Throws", true));
-            }
-        }
-        catch (Exception ex)
-        {
-            return Task.FromResult(new TestResult("Transaction_Commit_After_Rollback_Throws", false, ex.Message));
-        }
-    }
+    private static bool IsClose(decimal expected, decimal actual) =>
+        Math.Abs(expected - actual) <= 0.0001m;
 }
