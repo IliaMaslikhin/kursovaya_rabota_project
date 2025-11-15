@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("OilErp.Tests.Runner")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f39158d0a30df252c9f6b0961b85e8288379302f")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+79cb99fb080fbf4ab9824e4572c99720b567f759")]
 [assembly: System.Reflection.AssemblyProductAttribute("OilErp.Tests.Runner")]
 [assembly: System.Reflection.AssemblyTitleAttribute("OilErp.Tests.Runner")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
