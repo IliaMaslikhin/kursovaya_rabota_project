@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OilErp.Infrastructure", "Oi
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OilErp.Tests.Runner", "OilErp.Tests.Runner\OilErp.Tests.Runner.csproj", "{82DABF86-E7C3-4BF1-B970-EB1714C607D7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OilErp.Ui", "OilErp.Ui\OilErp.Ui.csproj", "{9D1971FC-99FD-43F3-A409-FE81A8305F27}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{82DABF86-E7C3-4BF1-B970-EB1714C607D7}.Release|x64.Build.0 = Release|Any CPU
 		{82DABF86-E7C3-4BF1-B970-EB1714C607D7}.Release|x86.ActiveCfg = Release|Any CPU
 		{82DABF86-E7C3-4BF1-B970-EB1714C607D7}.Release|x86.Build.0 = Release|Any CPU
+		{9D1971FC-99FD-43F3-A409-FE81A8305F27}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9D1971FC-99FD-43F3-A409-FE81A8305F27}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9D1971FC-99FD-43F3-A409-FE81A8305F27}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{9D1971FC-99FD-43F3-A409-FE81A8305F27}.Debug|x64.Build.0 = Debug|Any CPU
+		{9D1971FC-99FD-43F3-A409-FE81A8305F27}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{9D1971FC-99FD-43F3-A409-FE81A8305F27}.Debug|x86.Build.0 = Debug|Any CPU
+		{9D1971FC-99FD-43F3-A409-FE81A8305F27}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9D1971FC-99FD-43F3-A409-FE81A8305F27}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9D1971FC-99FD-43F3-A409-FE81A8305F27}.Release|x64.ActiveCfg = Release|Any CPU
+		{9D1971FC-99FD-43F3-A409-FE81A8305F27}.Release|x64.Build.0 = Release|Any CPU
+		{9D1971FC-99FD-43F3-A409-FE81A8305F27}.Release|x86.ActiveCfg = Release|Any CPU
+		{9D1971FC-99FD-43F3-A409-FE81A8305F27}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

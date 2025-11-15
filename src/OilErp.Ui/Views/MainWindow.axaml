@@ -1,0 +1,505 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OilErp.Ui.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        d:DesignWidth="1280"
+        d:DesignHeight="720"
+        x:Class="OilErp.Ui.Views.MainWindow"
+        x:Name="ShellWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="Рабочее место OilErp"
+        Background="{Binding Palette.WindowBackground}"
+        RequestedThemeVariant="{Binding CurrentTheme}">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <Window.Styles>
+        <Style Selector="TextBlock.Header">
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground">
+                <Setter.Value>
+                    <Binding ElementName="ShellWindow"
+                             Path="DataContext.Palette.PrimaryTextBrush"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style Selector="TextBlock.Subtle">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground">
+                <Setter.Value>
+                    <Binding ElementName="ShellWindow"
+                             Path="DataContext.Palette.SecondaryTextBrush"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style Selector="Border.Card">
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Background">
+                <Setter.Value>
+                    <Binding ElementName="ShellWindow"
+                             Path="DataContext.Palette.CardBackground"/>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="BorderBrush">
+                <Setter.Value>
+                    <Binding ElementName="ShellWindow"
+                             Path="DataContext.Palette.BorderBrush"/>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="16"/>
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="Auto,*,Auto"
+          ColumnDefinitions="260,*"
+          RowSpacing="16"
+          ColumnSpacing="16"
+          Margin="24">
+        <Border Grid.ColumnSpan="2"
+                Background="{Binding Palette.PanelBackground}"
+                CornerRadius="16"
+                Padding="24"
+                BorderBrush="{Binding Palette.BorderBrush}"
+                BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto"
+                  ColumnSpacing="24">
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="Header" Text="{Binding ShellTitle}"/>
+                    <TextBlock Text="{Binding MissionStatement}" Classes="Subtle" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding KernelStatus}" Classes="Subtle" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding DataSourceStatus}" Classes="Subtle" TextWrapping="Wrap"/>
+                </StackPanel>
+                <StackPanel Spacing="8"
+                            HorizontalAlignment="Right">
+                    <ToggleSwitch Content="Тёмная тема"
+                                  IsChecked="{Binding IsDarkTheme}"
+                                  HorizontalAlignment="Right"/>
+                    <StackPanel>
+                        <TextBlock Text="{Binding EnvironmentLabel}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{Binding Palette.AccentBrush}"
+                                   HorizontalAlignment="Right"/>
+                        <TextBlock Text="{Binding LastSyncDisplay}"
+                                   Classes="Subtle"
+                                   HorizontalAlignment="Right"/>
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1"
+                Grid.RowSpan="2"
+                Background="{Binding Palette.PanelBackground}"
+                CornerRadius="16"
+                Padding="20"
+                BorderBrush="{Binding Palette.BorderBrush}"
+                BorderThickness="1">
+            <Grid RowDefinitions="Auto,*">
+                <TextBlock Text="Разделы"
+                           FontWeight="SemiBold"
+                           Foreground="{Binding Palette.PrimaryTextBrush}"
+                           FontSize="16"/>
+                <ScrollViewer Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto">
+                    <ListBox ItemsSource="{Binding Sections}"
+                             SelectedItem="{Binding SelectedSection}"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             ScrollViewer.VerticalScrollBarVisibility="Hidden">
+                        <ListBox.Styles>
+                            <Style Selector="ListBoxItem">
+                                <Setter Property="Margin" Value="0 0 0 8"/>
+                                <Setter Property="CornerRadius" Value="12"/>
+                                <Setter Property="Padding" Value="12"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            </Style>
+                            <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                                <Setter Property="Background">
+                                    <Setter.Value>
+                                        <Binding Path="Palette.BorderBrush"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                            <Style Selector="ListBoxItem:checked /template/ ContentPresenter#PART_ContentPresenter">
+                                <Setter Property="Background">
+                                    <Setter.Value>
+                                        <Binding Path="Palette.AccentMutedBrush"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.Styles>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:McpSectionViewModel">
+                                <Grid ColumnDefinitions="Auto,*"
+                                      ColumnSpacing="12">
+                                    <TextBlock Text="{Binding Glyph}"
+                                               FontSize="18"
+                                               Foreground="{Binding ElementName=ShellWindow, Path=DataContext.Palette.SecondaryTextBrush}"/>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Title}"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{Binding ElementName=ShellWindow, Path=DataContext.Palette.PrimaryTextBrush}"/>
+                                        <TextBlock Text="{Binding Summary}"
+                                                   Classes="Subtle"
+                                                   TextWrapping="Wrap"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxHeight="54"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1"
+                Grid.Column="1"
+                CornerRadius="16"
+                BorderBrush="{Binding Palette.BorderBrush}"
+                BorderThickness="1"
+                Padding="24"
+                Background="{Binding Palette.PanelBackground}">
+            <Grid RowDefinitions="Auto,Auto,*"
+                  RowSpacing="24">
+                <ContentControl Content="{Binding SelectedSection}">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:McpSectionViewModel">
+                            <StackPanel Spacing="12">
+                                <StackPanel Orientation="Horizontal"
+                                            Spacing="12"
+                                            VerticalAlignment="Center">
+                                    <Border Width="40"
+                                            Height="40"
+                                            Background="{Binding ElementName=ShellWindow, Path=DataContext.Palette.CardBackground}"
+                                            CornerRadius="20">
+                                        <TextBlock Text="{Binding Glyph}"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"
+                                                   FontSize="20"
+                                                   Foreground="{Binding ElementName=ShellWindow, Path=DataContext.Palette.PrimaryTextBrush}"/>
+                                    </Border>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Title}"
+                                                   FontSize="22"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{Binding ElementName=ShellWindow, Path=DataContext.Palette.PrimaryTextBrush}"/>
+                                        <TextBlock Text="{Binding Tagline}"
+                                                   Classes="Subtle"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <Border Classes="Card">
+                                    <TextBlock Text="{Binding Summary}"
+                                               Foreground="{Binding ElementName=ShellWindow, Path=DataContext.Palette.PrimaryTextBrush}"
+                                               TextWrapping="Wrap"/>
+                                </Border>
+                                <StackPanel>
+                                    <TextBlock Text="Актуальные приоритеты"
+                                               Foreground="{Binding ElementName=ShellWindow, Path=DataContext.Palette.PrimaryTextBrush}"
+                                               FontWeight="SemiBold"/>
+                                    <ItemsControl ItemsSource="{Binding PriorityItems}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel ItemSpacing="12"
+                                                           LineSpacing="12"/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Classes="Card"
+                                                        MinWidth="200">
+                                                    <TextBlock Text="{Binding .}"
+                                                               Foreground="{Binding ElementName=ShellWindow, Path=DataContext.Palette.PrimaryTextBrush}"
+                                                               TextWrapping="Wrap"/>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+
+                <StackPanel Grid.Row="1"
+                            Spacing="8">
+                    <TextBlock Text="Пульс системы"
+                               Foreground="{Binding Palette.PrimaryTextBrush}"
+                               FontWeight="SemiBold"/>
+                    <ItemsControl ItemsSource="{Binding StatusPulses}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel ItemSpacing="16"
+                                           LineSpacing="12"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:StatusPulseViewModel">
+                                <Border Classes="Card"
+                                        MinWidth="220">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="{Binding Label}"
+                                                   Foreground="{Binding ElementName=ShellWindow, Path=DataContext.Palette.AccentBrush}"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock Text="{Binding Value}"
+                                                   Foreground="{Binding ElementName=ShellWindow, Path=DataContext.Palette.PrimaryTextBrush}"
+                                                   FontSize="16"/>
+                                        <TextBlock Text="{Binding Description}"
+                                                   Classes="Subtle"
+                                                   TextWrapping="Wrap"/>
+                                        <TextBlock Text="Критично"
+                                                   Foreground="{Binding ElementName=ShellWindow, Path=DataContext.Palette.CriticalBrush}"
+                                                   FontWeight="SemiBold"
+                                                   IsVisible="{Binding IsCritical}"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <Grid Grid.Row="2"
+                      ColumnDefinitions="360,*"
+                      ColumnSpacing="16">
+                    <Border Classes="Card">
+                        <TabControl Padding="0">
+                            <TabItem Header="Измерения">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Spacing="12"
+                                                Margin="4"
+                                                DataContext="{Binding AddMeasurementForm}">
+                                        <TextBlock Text="Создание замера"
+                                                   Foreground="{Binding DataContext.Palette.PrimaryTextBrush, ElementName=ShellWindow}"
+                                                   FontWeight="SemiBold"/>
+                                        <ComboBox ItemsSource="{Binding Plants}"
+                                                  SelectedItem="{Binding SelectedPlant}"
+                                                  PlaceholderText="Завод"/>
+                                        <ComboBox ItemsSource="{Binding Assets}"
+                                                  SelectedItem="{Binding SelectedAsset}"
+                                                  PlaceholderText="Актив"/>
+                                        <TextBox Text="{Binding Label, UpdateSourceTrigger=PropertyChanged}"
+                                                 Watermark="Метка замера"/>
+                                        <Grid ColumnDefinitions="*,*"
+                                              ColumnSpacing="12">
+                                            <DatePicker SelectedDate="{Binding MeasurementDate}"/>
+                                            <TimePicker SelectedTime="{Binding MeasurementTime}"/>
+                                        </Grid>
+                                        <NumericUpDown Minimum="5"
+                                                       Maximum="30"
+                                                       Increment="0.1"
+                                                       Value="{Binding Thickness}"
+                                                       FormatString="0.0"
+                                                       Watermark="Толщина, мм"/>
+                                        <TextBox Text="{Binding Note}"
+                                                 Watermark="Примечание"
+                                                 AcceptsReturn="True"
+                                                 Height="60"/>
+                                        <Button Content="Сохранить замер"
+                                                Command="{Binding SubmitCommand}"
+                                                HorizontalAlignment="Stretch"/>
+                                        <TextBlock Text="{Binding StatusMessage}"
+                                                   Classes="Subtle"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </TabItem>
+                            <TabItem Header="Команды БД">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Spacing="10"
+                                                Margin="4"
+                                                DataContext="{Binding AddOperationForm}">
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="6"
+                                                    VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding SelectedOperation.Icon}"
+                                                       FontSize="18"/>
+                                            <ComboBox ItemsSource="{Binding OperationKinds}"
+                                                      SelectedItem="{Binding SelectedOperation}"
+                                                      Width="220">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:OperationOption">
+                                                        <TextBlock Text="{Binding Title}"/>
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding SelectedOperation.Description}"
+                                                   Classes="Subtle"
+                                                   TextWrapping="Wrap"/>
+                                        <StackPanel IsVisible="{Binding IsAssetOperation}"
+                                                    Spacing="8">
+                                            <TextBox Text="{Binding AssetCode}"
+                                                     Watermark="Код актива"/>
+                                            <TextBox Text="{Binding AssetName}"
+                                                     Watermark="Название"/>
+                                            <TextBox Text="{Binding AssetType}"
+                                                     Watermark="Тип"/>
+                                            <TextBox Text="{Binding AssetPlant}"
+                                                     Watermark="Завод"/>
+                                        </StackPanel>
+                                        <StackPanel IsVisible="{Binding IsPolicyOperation}"
+                                                    Spacing="8">
+                                            <TextBox Text="{Binding PolicyName}"
+                                                     Watermark="Имя политики"/>
+                                            <Grid ColumnDefinitions="*,*,*"
+                                                  ColumnSpacing="8">
+                                                <NumericUpDown Value="{Binding PolicyLow}"
+                                                               Increment="0.0005"
+                                                               FormatString="0.0000"
+                                                               Minimum="0"
+                                                               Watermark="Low"/>
+                                                <NumericUpDown Grid.Column="1"
+                                                               Value="{Binding PolicyMed}"
+                                                               Increment="0.0005"
+                                                               FormatString="0.0000"
+                                                               Minimum="0"
+                                                               Watermark="Med"/>
+                                                <NumericUpDown Grid.Column="2"
+                                                               Value="{Binding PolicyHigh}"
+                                                               Increment="0.0005"
+                                                               FormatString="0.0000"
+                                                               Minimum="0"
+                                                               Watermark="High"/>
+                                            </Grid>
+                                        </StackPanel>
+                                        <StackPanel IsVisible="{Binding IsEventOperation}"
+                                                    Spacing="8">
+                                            <TextBox Text="{Binding EventType}"
+                                                     Watermark="Тип события"/>
+                                            <TextBox Text="{Binding EventPlant}"
+                                                     Watermark="Завод"/>
+                                            <TextBox Text="{Binding EventPayload}"
+                                                     Watermark="JSON payload"
+                                                     AcceptsReturn="True"
+                                                     Height="80"/>
+                                        </StackPanel>
+                                        <Button Content="Выполнить команду"
+                                                Command="{Binding SubmitOperationCommand}"
+                                                HorizontalAlignment="Stretch"/>
+                                        <TextBlock Text="{Binding OperationStatus}"
+                                                   Classes="Subtle"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </TabItem>
+                        </TabControl>
+                    </Border>
+                    <Border Classes="Card">
+                        <Grid RowDefinitions="Auto,Auto,*"
+                              RowSpacing="8">
+                            <TextBlock Text="Окно аналитики"
+                                       Foreground="{Binding Palette.PrimaryTextBrush}"
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding AnalyticsSummary}"
+                                       Classes="Subtle"
+                                       TextWrapping="Wrap"/>
+                            <ScrollViewer Grid.Row="2"
+                                          VerticalScrollBarVisibility="Auto"
+                                          MaxHeight="260">
+                                <ItemsControl ItemsSource="{Binding AnalyticsEntries}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:MeasurementAnalyticsEntryViewModel">
+                                            <Border Margin="0 0 0 8"
+                                                    Padding="12"
+                                                    CornerRadius="10"
+                                                    BorderThickness="1"
+                                                    BorderBrush="{Binding ElementName=ShellWindow, Path=DataContext.Palette.BorderBrush}"
+                                                    Background="{Binding ElementName=ShellWindow, Path=DataContext.Palette.PanelBackground}">
+                                                <Grid ColumnDefinitions="*,Auto"
+                                                      ColumnSpacing="12">
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding Plant}"
+                                                                   Foreground="{Binding ElementName=ShellWindow, Path=DataContext.Palette.PrimaryTextBrush}"
+                                                                   FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding Label}"
+                                                                   Foreground="{Binding ElementName=ShellWindow, Path=DataContext.Palette.PrimaryTextBrush}"/>
+                                                        <TextBlock Text="{Binding Note}"
+                                                                   Classes="Subtle"
+                                                                   TextWrapping="Wrap"/>
+                                                    </StackPanel>
+                                                    <StackPanel HorizontalAlignment="Right"
+                                                                Spacing="4">
+                                                        <TextBlock Text="{Binding ThicknessDisplay}"
+                                                                   Foreground="{Binding ElementName=ShellWindow, Path=DataContext.Palette.PrimaryTextBrush}"
+                                                                   FontWeight="Bold"
+                                                                   HorizontalAlignment="Right"/>
+                                                        <TextBlock Text="{Binding TimestampDisplay}"
+                                                                   Classes="Subtle"
+                                                                   HorizontalAlignment="Right"/>
+                                                        <TextBlock Text="{Binding AssetCode}"
+                                                                   Classes="Subtle"
+                                                                   HorizontalAlignment="Right"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="2"
+                Grid.Column="1"
+                Background="{Binding Palette.PanelBackground}"
+                CornerRadius="16"
+                Padding="20"
+                BorderBrush="{Binding Palette.BorderBrush}"
+                BorderThickness="1">
+            <Grid RowDefinitions="Auto,*"
+                  RowSpacing="8">
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Center"
+                            Spacing="12">
+                    <TextBlock Text="Консоль диагностики"
+                               Foreground="{Binding Palette.PrimaryTextBrush}"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding LastSyncDisplay}"
+                               Classes="Subtle"/>
+                </StackPanel>
+                <ScrollViewer Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto"
+                              MaxHeight="220">
+                    <ItemsControl ItemsSource="{Binding Diagnostics}"
+                                  Margin="0 0 0 4">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:DiagnosticEntryViewModel">
+                                <Grid ColumnDefinitions="Auto,*"
+                                      Margin="0 0 0 8"
+                                      ColumnSpacing="12">
+                                    <Border Background="{Binding ElementName=ShellWindow, Path=DataContext.Palette.AccentMutedBrush}"
+                                            CornerRadius="6"
+                                            Padding="6">
+                                        <TextBlock Text="{Binding Timestamp}"
+                                                   Foreground="{Binding ElementName=ShellWindow, Path=DataContext.Palette.PrimaryTextBrush}"
+                                                   FontWeight="Bold"/>
+                                    </Border>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Headline}"
+                                                   Foreground="{Binding ElementName=ShellWindow, Path=DataContext.Palette.PrimaryTextBrush}"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock Text="{Binding Detail}"
+                                                   Classes="Subtle"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

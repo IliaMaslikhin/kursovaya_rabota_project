@@ -1,0 +1,12 @@
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Core/bin/Release/net8.0/OilErp.Core.deps.json
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Core/bin/Release/net8.0/OilErp.Core.dll
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Core/bin/Release/net8.0/OilErp.Core.pdb
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Core/obj/Release/net8.0/OilErp.Core.GeneratedMSBuildEditorConfig.editorconfig
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Core/obj/Release/net8.0/OilErp.Core.AssemblyInfoInputs.cache
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Core/obj/Release/net8.0/OilErp.Core.AssemblyInfo.cs
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Core/obj/Release/net8.0/OilErp.Core.csproj.CoreCompileInputs.cache
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Core/obj/Release/net8.0/OilErp.Core.sourcelink.json
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Core/obj/Release/net8.0/OilErp.Core.dll
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Core/obj/Release/net8.0/refint/OilErp.Core.dll
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Core/obj/Release/net8.0/OilErp.Core.pdb
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Core/obj/Release/net8.0/ref/OilErp.Core.dll
