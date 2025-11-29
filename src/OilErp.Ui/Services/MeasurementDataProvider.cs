@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
+using OilErp.Bootstrap;
 using OilErp.Core.Contracts;
 using OilErp.Core.Dto;
 using OilErp.Core.Services.Central;
@@ -12,7 +13,7 @@ namespace OilErp.Ui.Services;
 
 public sealed class MeasurementDataProvider
 {
-    private static readonly TimeSpan LiveLoadTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan LiveLoadTimeout = TimeSpan.FromSeconds(10);
 
     private readonly IStoragePort storage;
     private readonly MeasurementSnapshotService fallbackSnapshots;
@@ -25,26 +26,18 @@ public sealed class MeasurementDataProvider
 
     public MeasurementDataResult Load()
     {
-        if (storage is InMemoryStoragePort)
+        AppLogger.Info("[ui] загрузка данных для UI");
+        using var cts = new CancellationTokenSource(LiveLoadTimeout);
+        var series = LoadFromKernel(cts.Token);
+        if (series.Count > 0)
         {
-            return new MeasurementDataResult(fallbackSnapshots.LoadSeries(), "Резервные JSON-данные (ядро офлайн).");
+            AppLogger.Info($"[ui] получено {series.Count} рядов из БД");
+            return new MeasurementDataResult(series, "Данные из центральной БД (StorageAdapter).");
         }
 
-        try
-        {
-            using var cts = new CancellationTokenSource(LiveLoadTimeout);
-            var series = LoadFromKernel(cts.Token);
-            if (series.Count > 0)
-            {
-                return new MeasurementDataResult(series, "Данные из центральной БД (StorageAdapter).");
-            }
-
-            return new MeasurementDataResult(fallbackSnapshots.LoadSeries(), "Резервные JSON-данные (центральная БД вернула пустой набор).");
-        }
-        catch (Exception ex)
-        {
-            return new MeasurementDataResult(fallbackSnapshots.LoadSeries(), $"Резервные JSON-данные (ошибка БД: {ex.Message})");
-        }
+        // Если БД пуста — используем JSON как вспомогательную загрузку, но соединение обязательно.
+        AppLogger.Info("[ui] БД вернула пустой набор, добавляем JSON снапшоты");
+        return new MeasurementDataResult(fallbackSnapshots.LoadSeries(), "БД пуста, загружены резервные JSON-добивки.");
     }
 
     private IReadOnlyList<MeasurementSeries> LoadFromKernel(CancellationToken ct)

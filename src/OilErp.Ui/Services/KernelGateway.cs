@@ -1,10 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading;
+using OilErp.Bootstrap;
 using OilErp.Core.Contracts;
 using OilErp.Core.Dto;
 using OilErp.Core.Operations;
 using OilErp.Infrastructure.Adapters;
+using OilErp.Infrastructure.Config;
+
+#nullable enable
 
 namespace OilErp.Ui.Services;
 
@@ -13,14 +17,15 @@ namespace OilErp.Ui.Services;
 /// </summary>
 public sealed class KernelGateway
 {
-    private const string ConnectionEnvVar = "OIL_ERP_PG";
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(3);
 
-    private KernelGateway(IStoragePort storage, bool isLive, string statusMessage)
+    private KernelGateway(IStoragePort storage, bool isLive, string statusMessage, BootstrapResult? bootstrapInfo, StorageConfig? storageConfig)
     {
         Storage = storage;
         IsLive = isLive;
         StatusMessage = statusMessage;
+        BootstrapInfo = bootstrapInfo;
+        StorageConfig = storageConfig;
     }
 
     public IStoragePort Storage { get; }
@@ -29,29 +34,43 @@ public sealed class KernelGateway
 
     public string StatusMessage { get; }
 
-    public static KernelGateway Create()
+    public BootstrapResult? BootstrapInfo { get; }
+
+    public StorageConfig? StorageConfig { get; }
+
+    public static KernelGateway Create(string connectionString)
     {
-        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ConnectionEnvVar)))
+        var config = new StorageConfig(connectionString ?? throw new ArgumentNullException(nameof(connectionString)), 30);
+        AppLogger.Info($"[ui] init kernel gateway with conn='{config.ConnectionString}'");
+        BootstrapResult? bootstrap = null;
+        var bootstrapper = new DatabaseBootstrapper(config.ConnectionString);
+        bootstrap = bootstrapper.EnsureProvisionedAsync().GetAwaiter().GetResult();
+        if (!bootstrap.Success)
         {
-            return new KernelGateway(
-                new InMemoryStoragePort(),
-                false,
-                $"Переменная {ConnectionEnvVar} не задана — используем офлайн-данные.");
+            var failStatus = BuildFailureStatus(bootstrap);
+            AppLogger.Error($"[ui] bootstrap failed: {failStatus}");
+            throw new InvalidOperationException(failStatus);
         }
 
-        try
-        {
-            var storage = new StorageAdapter();
-            ValidateConnection(storage);
-            return new KernelGateway(storage, true, "Подключено к StorageAdapter (PostgreSQL).");
-        }
-        catch (Exception ex)
-        {
-            return new KernelGateway(
-                new InMemoryStoragePort(),
-                false,
-                $"Офлайн-режим (ошибка подключения): {ex.Message}");
-        }
+        var storage = new StorageAdapter(config);
+        ValidateConnection(storage);
+        var okStatus = BuildSuccessStatus(bootstrap);
+        AppLogger.Info($"[ui] storage ready: {okStatus}");
+        return new KernelGateway(storage, true, okStatus, bootstrap, config);
+    }
+
+    private static string BuildSuccessStatus(BootstrapResult bootstrap)
+    {
+        var firstRun = bootstrap.IsFirstRun ? " · первичный запуск" : string.Empty;
+        var guideHint = string.IsNullOrWhiteSpace(bootstrap.GuidePath) ? string.Empty : $" · гайд: {bootstrap.GuidePath}";
+        return $"Подключено к StorageAdapter (профиль {bootstrap.Profile}, код {bootstrap.MachineCode}{firstRun}){guideHint}";
+    }
+
+    private static string BuildFailureStatus(BootstrapResult bootstrap)
+    {
+        var codeHint = string.IsNullOrWhiteSpace(bootstrap.MachineCode) ? string.Empty : $" · код {bootstrap.MachineCode}";
+        var guideHint = string.IsNullOrWhiteSpace(bootstrap.GuidePath) ? string.Empty : $" · гайд: {bootstrap.GuidePath}";
+        return $"БД не готова: {bootstrap.ErrorMessage ?? "не удалось инициализировать БД"}{codeHint}{guideHint}";
     }
 
     private static void ValidateConnection(IStoragePort storage)
@@ -68,6 +87,11 @@ public sealed class KernelGateway
             TimeoutSeconds: 5);
 
         using var cts = new CancellationTokenSource(ProbeTimeout);
-        storage.ExecuteQueryAsync<decimal>(spec, cts.Token).GetAwaiter().GetResult();
+        var rows = storage.ExecuteQueryAsync<object>(spec, cts.Token).GetAwaiter().GetResult();
+        if (rows.Count == 0)
+            throw new InvalidOperationException("fn_calc_cr вернула пустой результат.");
+        if (rows[0] is not decimal and not double and not float)
+            throw new InvalidOperationException($"fn_calc_cr ожидался decimal, но получено {rows[0].GetType().Name}");
+        AppLogger.Info("[ui] проверка fn_calc_cr прошла успешно");
     }
 }

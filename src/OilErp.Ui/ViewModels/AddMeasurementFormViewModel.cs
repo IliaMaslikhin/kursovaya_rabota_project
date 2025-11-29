@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OilErp.Core.Dto;
@@ -11,10 +12,12 @@ namespace OilErp.Ui.ViewModels;
 
 public sealed partial class AddMeasurementFormViewModel : ObservableObject
 {
-    private readonly Action<AddMeasurementRequest> submitCallback;
+    private readonly Func<AddMeasurementRequest, Task<MeasurementSubmissionResult>> submitCallback;
     private readonly Dictionary<string, List<string>> plantAssets;
 
-    public AddMeasurementFormViewModel(IEnumerable<MeasurementSeries> series, Action<AddMeasurementRequest> submitCallback)
+    public AddMeasurementFormViewModel(
+        IEnumerable<MeasurementSeries> series,
+        Func<AddMeasurementRequest, Task<MeasurementSubmissionResult>> submitCallback)
     {
         this.submitCallback = submitCallback;
         plantAssets = series
@@ -113,7 +116,7 @@ public sealed partial class AddMeasurementFormViewModel : ObservableObject
            && SelectedAsset is not null;
 
     [RelayCommand(CanExecute = nameof(CanSubmit))]
-    private void Submit()
+    private async Task SubmitAsync()
     {
         var timestamp = DateTime.SpecifyKind(MeasurementDate.Date + MeasurementTime, DateTimeKind.Utc);
         var dto = new MeasurementPointDto(
@@ -122,14 +125,17 @@ public sealed partial class AddMeasurementFormViewModel : ObservableObject
             (decimal)Math.Round(Thickness, 2),
             string.IsNullOrWhiteSpace(Note) ? null : Note.Trim());
 
-        submitCallback(new AddMeasurementRequest(SelectedPlant!, SelectedAsset!, dto));
+        var result = await submitCallback(new AddMeasurementRequest(SelectedPlant!, SelectedAsset!, dto));
+        StatusMessage = result.Message;
 
-        StatusMessage = $"Замер {Label.Trim()} сохранён для {SelectedPlant} · {SelectedAsset}.";
-        Label = string.Empty;
-        Note = string.Empty;
-        Thickness = 12.0;
-        MeasurementDate = DateTime.UtcNow.Date;
-        MeasurementTime = DateTime.UtcNow.TimeOfDay;
+        if (result.Success)
+        {
+            Label = string.Empty;
+            Note = string.Empty;
+            Thickness = 12.0;
+            MeasurementDate = DateTime.UtcNow.Date;
+            MeasurementTime = DateTime.UtcNow.TimeOfDay;
+        }
     }
 
     public void RegisterSeries(MeasurementSeries series)

@@ -1712,6 +1712,7 @@
       "Avalonia.Fonts.Inter >= 11.3.8",
       "Avalonia.Themes.Fluent >= 11.3.8",
       "CommunityToolkit.Mvvm >= 8.2.1",
+      "Npgsql >= 10.0.0-rc.1",
       "OilErp.Core >= 1.0.0",
       "OilErp.Infrastructure >= 1.0.0"
     ]
@@ -1790,6 +1791,10 @@
           "CommunityToolkit.Mvvm": {
             "target": "Package",
             "version": "[8.2.1, )"
+          },
+          "Npgsql": {
+            "target": "Package",
+            "version": "[10.0.0-rc.1, )"
           }
         },
         "imports": [

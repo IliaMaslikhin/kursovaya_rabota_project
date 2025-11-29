@@ -1,10 +1,13 @@
 using System.Linq;
 using System.Text.Json;
+using System.Diagnostics;
+using System.Text;
 using OilErp.Core.Abstractions;
 using OilErp.Core.Dto;
 using OilErp.Infrastructure.Config;
 using Npgsql;
 using NpgsqlTypes;
+using OilErp.Bootstrap;
 
 namespace OilErp.Infrastructure.Adapters;
 
@@ -40,71 +43,83 @@ public class StorageAdapter : DbClientBase
     /// <inheritdoc />
     public override async Task<IReadOnlyList<T>> ExecuteQueryAsync<T>(QuerySpec spec, CancellationToken ct = default)
     {
+        var sw = Stopwatch.StartNew();
         if (spec == null) throw new ArgumentNullException(nameof(spec));
 
-        var (schema, name) = SplitQualifiedName(spec.OperationName);
-        var conn = await GetConnectionAsync(ct);
-        await using var _ = conn.Item2; // ensures disposal if we opened a new connection
-        var npg = conn.Item1;
-
-        var meta = await GetRoutineMetadataAsync(schema, name, npg, ct);
-
-        if (meta.IsProcedure)
+        try
         {
-            // Процедуры не возвращают набор; вызов через CALL и вернуть пустой список
-            var cmd = BuildRoutineCommand(npg, meta, spec.Parameters, isQuery: false);
-            cmd.CommandTimeout = ResolveTimeout(spec.TimeoutSeconds);
-            await cmd.ExecuteNonQueryAsync(ct);
-            return Array.Empty<T>();
-        }
+            AppLogger.Info($"[БД] запрос op={spec.OperationName} параметры={FormatParameters(spec.Parameters)}");
 
-        // FUNCTION: определить канал возврата
-        var queryCmd = BuildRoutineCommand(npg, meta, spec.Parameters, isQuery: true);
-        queryCmd.CommandTimeout = ResolveTimeout(spec.TimeoutSeconds);
+            var (schema, name) = SplitQualifiedName(spec.OperationName);
+            var conn = await GetConnectionAsync(ct);
+            await using var _ = conn.Item2; // ensures disposal if we opened a new connection
+            var npg = conn.Item1;
 
-        if (meta.ReturnsJson)
-        {
-            var result = await queryCmd.ExecuteScalarAsync(ct);
-            var text = result?.ToString() ?? string.Empty;
-            var list = new List<T>(1);
-            if (text is T t) list.Add(t);
-            else if (typeof(T) == typeof(object)) list.Add((T)(object)text);
-            else throw new InvalidCastException($"Cannot cast JSON text result to {typeof(T).Name}");
-            return list;
-        }
-        else
-        {
-            await using var reader = await queryCmd.ExecuteReaderAsync(ct);
-            var rows = new List<object>();
-            while (await reader.ReadAsync(ct))
+            var meta = await GetRoutineMetadataAsync(schema, name, npg, ct);
+
+            if (meta.IsProcedure)
             {
-                var row = new Dictionary<string, object?>(reader.FieldCount, StringComparer.Ordinal);
-                for (int i = 0; i < reader.FieldCount; i++)
-                {
-                    var val = await reader.IsDBNullAsync(i, ct) ? null : reader.GetValue(i);
-                    row[reader.GetName(i)] = val;
-                }
-                rows.Add(row);
+                // Процедуры не возвращают набор; вызов через CALL и вернуть пустой список
+                var cmd = BuildRoutineCommand(npg, meta, spec.Parameters, isQuery: false);
+                cmd.CommandTimeout = ResolveTimeout(spec.TimeoutSeconds);
+                await cmd.ExecuteNonQueryAsync(ct);
+                return Array.Empty<T>();
             }
 
-            // Приведение к запрошенному T
-            var casted = new List<T>(rows.Count);
-            foreach (var r in rows)
+            // FUNCTION: определить канал возврата
+            var queryCmd = BuildRoutineCommand(npg, meta, spec.Parameters, isQuery: true);
+            queryCmd.CommandTimeout = ResolveTimeout(spec.TimeoutSeconds);
+
+            if (meta.ReturnsJson)
             {
-                if (r is T ok)
-                {
-                    casted.Add(ok);
-                }
-                else if (typeof(T) == typeof(object))
-                {
-                    casted.Add((T)r);
-                }
-                else
-                {
-                    throw new InvalidCastException($"Row type {r.GetType().Name} is not assignable to {typeof(T).Name}");
-                }
+                var result = await queryCmd.ExecuteScalarAsync(ct);
+                var text = result?.ToString() ?? string.Empty;
+                var list = new List<T>(1);
+                if (text is T t) list.Add(t);
+                else if (typeof(T) == typeof(object)) list.Add((T)(object)text);
+                else throw new InvalidCastException($"Cannot cast JSON text result to {typeof(T).Name}");
+                return list;
             }
-            return casted;
+            else
+            {
+                await using var reader = await queryCmd.ExecuteReaderAsync(ct);
+                var rows = new List<object>();
+                while (await reader.ReadAsync(ct))
+                {
+                    var row = new Dictionary<string, object?>(reader.FieldCount, StringComparer.Ordinal);
+                    for (int i = 0; i < reader.FieldCount; i++)
+                    {
+                        var val = await reader.IsDBNullAsync(i, ct) ? null : reader.GetValue(i);
+                        row[reader.GetName(i)] = val;
+                    }
+
+                    rows.Add(row);
+                }
+
+                // Приведение к запрошенному T
+                var casted = new List<T>(rows.Count);
+                foreach (var r in rows)
+                {
+                    if (TryProjectSingleColumn<T>(r, out var projected))
+                        casted.Add(projected);
+                    else if (r is T ok) casted.Add(ok);
+                    else if (typeof(T) == typeof(object)) casted.Add((T)r);
+                    else
+                        throw new InvalidCastException(
+                            $"Row type {r.GetType().Name} is not assignable to {typeof(T).Name}");
+                }
+
+                return casted;
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"[БД] ошибка запроса op={spec.OperationName} ошибка={ex.Message}");
+            throw;
+        }
+        finally
+        {
+            AppLogger.Info($"[БД] запрос завершен op={spec.OperationName} длительность_мс={sw.ElapsedMilliseconds}");
         }
     }
 
@@ -112,6 +127,8 @@ public class StorageAdapter : DbClientBase
     public override async Task<int> ExecuteCommandAsync(CommandSpec spec, CancellationToken ct = default)
     {
         if (spec == null) throw new ArgumentNullException(nameof(spec));
+        var sw = Stopwatch.StartNew();
+        AppLogger.Info($"[БД] команда op={spec.OperationName} параметры={FormatParameters(spec.Parameters)}");
         var (schema, name) = SplitQualifiedName(spec.OperationName);
         var conn = await GetConnectionAsync(ct);
         await using var _ = conn.Item2;
@@ -141,6 +158,15 @@ public class StorageAdapter : DbClientBase
         {
             // Пробрасываем SQLSTATE в тексте исключения
             throw new InvalidOperationException($"PG error {pg.SqlState}: {pg.MessageText}", pg);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"[БД] ошибка команды op={spec.OperationName} ошибка={ex.Message}");
+            throw;
+        }
+        finally
+        {
+            AppLogger.Info($"[БД] команда завершена op={spec.OperationName} длительность_мс={sw.ElapsedMilliseconds}");
         }
     }
 
@@ -368,6 +394,61 @@ order by p.oid desc limit 1";
     {
         public bool ReturnsJson => string.Equals(ReturnType, "json", StringComparison.OrdinalIgnoreCase)
                                    || string.Equals(ReturnType, "jsonb", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryProjectSingleColumn<T>(object row, out T value)
+    {
+        value = default!;
+        if (row is Dictionary<string, object?> dict && dict.Count == 1)
+        {
+            var firstVal = dict.Values.FirstOrDefault();
+            if (firstVal is T ok)
+            {
+                value = ok;
+                return true;
+            }
+
+            if (typeof(T) != typeof(object))
+            {
+                try
+                {
+                    if (firstVal is IConvertible)
+                    {
+                        value = (T)Convert.ChangeType(firstVal, typeof(T));
+                        return true;
+                    }
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
+        }
+        return false;
+    }
+
+    private static string FormatParameters(IReadOnlyDictionary<string, object?>? parameters)
+    {
+        if (parameters == null || parameters.Count == 0) return "{}";
+        var sb = new StringBuilder();
+        sb.Append('{');
+        var first = true;
+        foreach (var kv in parameters)
+        {
+            if (!first) sb.Append(", ");
+            first = false;
+            var val = kv.Value switch
+            {
+                null => "null",
+                string s when s.Length > 80 => s.Substring(0, 77) + "...",
+                _ => kv.Value
+            };
+            sb.Append(kv.Key);
+            sb.Append('=');
+            sb.Append(val);
+        }
+        sb.Append('}');
+        return sb.ToString();
     }
 
     /// <summary>

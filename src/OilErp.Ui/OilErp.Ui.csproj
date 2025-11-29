@@ -25,10 +25,26 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\OilErp.Tests.Runner\Util\DatabaseInventory.cs">
+      <Link>Services\DatabaseInventory.cs</Link>
+    </Compile>
+    <Compile Include="..\OilErp.Tests.Runner\Util\DatabaseBootstrapper.cs">
+      <Link>Services\DatabaseBootstrapper.cs</Link>
+    </Compile>
+    <Compile Include="..\OilErp.Tests.Runner\Util\FirstRunTracker.cs">
+      <Link>Services\FirstRunTracker.cs</Link>
+    </Compile>
+    <Compile Include="..\OilErp.Tests.Runner\Util\AppLogger.cs">
+      <Link>Services\AppLogger.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.8" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.8" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.8" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.8" />
+    <PackageReference Include="Npgsql" Version="10.0.0-rc.1" />
     <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
     <PackageReference Include="Avalonia.Diagnostics" Version="11.3.8">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>

@@ -1,4 +1,5 @@
-﻿using OilErp.Tests.Runner.Smoke;
+﻿using OilErp.Bootstrap;
+using OilErp.Tests.Runner.Smoke;
 using OilErp.Tests.Runner.Util;
 using OilErp.Infrastructure.Adapters;
 using OilErp.Core.Services.Central;
@@ -16,16 +17,32 @@ namespace OilErp.Tests.Runner;
 
 /// <summary>
 /// Console application entry point for smoke tests
-/// </summary>
-class Program
-{
-    static async Task Main(string[] args)
+    /// </summary>
+    class Program
     {
-        if (args.Length > 0)
+        static async Task Main(string[] args)
         {
-            var exit = await HandleCliAsync(args);
-            Environment.ExitCode = exit ? 0 : 1;
-            return;
+            var bootstrapper = new DatabaseBootstrapper(TestEnvironment.ConnectionString);
+            var bootstrap = await bootstrapper.EnsureProvisionedAsync();
+            if (!bootstrap.Success)
+            {
+                Console.WriteLine($"[Bootstrap] Ошибка проверки/создания БД: {bootstrap.ErrorMessage}");
+                if (!string.IsNullOrWhiteSpace(bootstrap.GuidePath))
+                {
+                    Console.WriteLine($"[Bootstrap] Инструкция сохранена: {bootstrap.GuidePath}");
+                }
+
+                Environment.ExitCode = 1;
+                return;
+            }
+
+            Console.WriteLine($"[Bootstrap] Профиль={bootstrap.Profile} код машины={bootstrap.MachineCode} {(bootstrap.IsFirstRun ? "(первый запуск)" : string.Empty)}");
+
+            if (args.Length > 0)
+            {
+                var exit = await HandleCliAsync(args);
+                Environment.ExitCode = exit ? 0 : 1;
+                return;
         }
 
         Console.WriteLine("Расширенные смоук-тесты OilErp");
@@ -33,10 +50,13 @@ class Program
         Console.WriteLine();
 
         var runner = new TestRunner();
+        runner.IsFirstRun = bootstrap.IsFirstRun;
+        runner.MachineCode = bootstrap.MachineCode;
         var kernelSmoke = new KernelSmoke();
         var storageSmoke = new StorageSmoke();
         var extendedSmoke = new ExtendedSmokeTests();
         var asyncSmoke = new AsyncSmokeTests();
+        var bootstrapSmoke = new BootstrapSmokeTests();
         var validationSmoke = new ValidationSmokeTests();
 
         const string CategoryConnection = "Подключение к базе";
@@ -45,8 +65,8 @@ class Program
         const string CategoryReliability = "Надёжность и асинхронность";
         const string CategoryValidation = "Валидация окружения";
 
-        void RegisterScenario(string name, string category, string title, string successHint, string failureHint, TestScenario scenario) =>
-            runner.Register(new TestScenarioDefinition(name, category, title, successHint, failureHint, scenario));
+        void RegisterScenario(string name, string category, string title, string successHint, string failureHint, TestScenario scenario, TestRunScope scope = TestRunScope.Always) =>
+            runner.Register(new TestScenarioDefinition(name, category, title, successHint, failureHint, scenario, scope));
 
         // Подключение
         RegisterScenario(
@@ -147,7 +167,16 @@ class Program
             "Полнота объектной схемы",
             "Все обязательные объекты присутствуют",
             "Отсутствуют обязательные объекты",
-            validationSmoke.TestDatabaseInventoryMatchesExpectations);
+            validationSmoke.TestDatabaseInventoryMatchesExpectations,
+            TestRunScope.FirstRunOnly);
+        RegisterScenario(
+            "Machine_Code_Marker",
+            CategoryValidation,
+            "Маркер первого запуска",
+            "Код машины сохранён",
+            "Маркер первого запуска не записан",
+            bootstrapSmoke.TestMachineCodeMarkerPersisted,
+            TestRunScope.FirstRunOnly);
         RegisterScenario(
             "Connection_Profile_Detected",
             CategoryValidation,

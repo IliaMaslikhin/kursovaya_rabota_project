@@ -1,4 +1,7 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace OilErp.Tests.Runner.Util;
 
@@ -8,13 +11,23 @@ namespace OilErp.Tests.Runner.Util;
 /// <param name="Name">Scenario name</param>
 /// <param name="Success">Whether the scenario succeeded</param>
 /// <param name="Error">Error message if failed</param>
-public record TestResult(string Name, bool Success, string? Error = null);
+/// <param name="Skipped">True when the scenario was intentionally skipped</param>
+public record TestResult(string Name, bool Success, string? Error = null, bool Skipped = false);
 
 /// <summary>
 /// Test scenario delegate
 /// </summary>
 /// <returns>Test result</returns>
 public delegate Task<TestResult> TestScenario();
+
+/// <summary>
+/// Defines when a scenario should be executed.
+/// </summary>
+public enum TestRunScope
+{
+    Always,
+    FirstRunOnly
+}
 
 /// <summary>
 /// Test runner harness for registering and running named scenarios
@@ -25,7 +38,8 @@ public record TestScenarioDefinition(
     string Title,
     string SuccessHint,
     string FailureHint,
-    TestScenario Scenario);
+    TestScenario Scenario,
+    TestRunScope Scope = TestRunScope.Always);
 
 /// <summary>
 /// Test runner harness for registering and running named scenarios
@@ -33,6 +47,8 @@ public record TestScenarioDefinition(
 public class TestRunner
 {
     private readonly List<TestScenarioDefinition> _scenarios = new();
+    public bool IsFirstRun { get; set; } = true;
+    public string? MachineCode { get; set; }
 
     /// <summary>
     /// Registers a test scenario
@@ -51,6 +67,12 @@ public class TestRunner
 
         foreach (var definition in _scenarios)
         {
+            if (definition.Scope == TestRunScope.FirstRunOnly && !IsFirstRun)
+            {
+                results.Add((definition, new TestResult(definition.Name, true, "Skipped on repeat run", true)));
+                continue;
+            }
+
             try
             {
                 var result = await definition.Scenario();
@@ -71,6 +93,7 @@ public class TestRunner
     public async Task RunAndPrintAsync()
     {
         Console.WriteLine($"Запуск {_scenarios.Count} сценариев...");
+        Console.WriteLine($"Режим: {(IsFirstRun ? "первый запуск" : "повторный запуск")} (код машины: {MachineCode ?? "n/a"})");
         Console.WriteLine();
 
         var results = await RunAllAsync();
@@ -83,8 +106,10 @@ public class TestRunner
             Console.WriteLine($"Категория: {group.Key}");
             foreach (var item in group)
             {
-                var status = item.Result.Success ? "✅" : "❌";
-                var hint = item.Result.Success
+                var status = item.Result.Skipped ? "⏭" : item.Result.Success ? "✅" : "❌";
+                var hint = item.Result.Skipped
+                    ? "Пропущен для повторного запуска"
+                    : item.Result.Success
                     ? item.Definition.SuccessHint
                     : $"{item.Definition.FailureHint}. Детали: {item.Result.Error}";
                 Console.WriteLine($"  {status} {item.Definition.Title} — {hint}");
@@ -93,9 +118,11 @@ public class TestRunner
         }
 
         var totalTests = results.Count;
-        var passedTests = results.Count(r => r.Result.Success);
-        var failedTests = totalTests - passedTests;
-        Console.WriteLine($"Итого: {passedTests}/{totalTests} тестов пройдено, {failedTests} не прошло");
+        var skippedTests = results.Count(r => r.Result.Skipped);
+        var executedTests = totalTests - skippedTests;
+        var passedTests = results.Count(r => r.Result.Success && !r.Result.Skipped);
+        var failedTests = executedTests - passedTests;
+        Console.WriteLine($"Итого: {passedTests}/{executedTests} тестов пройдено, {failedTests} не прошло, пропущено: {skippedTests}");
 
         Console.WriteLine();
         Console.WriteLine("Интерпретация:");
