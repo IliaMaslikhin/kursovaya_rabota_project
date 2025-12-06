@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using OilErp.Bootstrap;
+using OilErp.Core.Dto;
 using OilErp.Tests.Runner;
 using OilErp.Tests.Runner.Util;
 

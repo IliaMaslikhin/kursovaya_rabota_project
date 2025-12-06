@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using OilErp.Core.Dto;
 using OilErp.Core.Operations;
+using OilErp.Core.Services.Aggregations;
 using OilErp.Infrastructure.Adapters;
 using OilErp.Tests.Runner;
 using OilErp.Tests.Runner.Util;
@@ -69,6 +70,57 @@ public class StorageSmoke
         {
             return new TestResult(testName, false, ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Validates plant CR stats (mean/P90) via SQL aggregation.
+    /// </summary>
+    public async Task<TestResult> TestPlantCrStatsMatchesSeed()
+    {
+        const string testName = "Plant_Cr_Stats_Match_Seed";
+        try
+        {
+            var storage = TestEnvironment.CreateStorageAdapter();
+            var scenario = new CentralHealthCheckScenario(storage, _dataSet);
+            var snapshot = await scenario.SeedAsync(CancellationToken.None);
+
+            var svc = new PlantCrService(storage);
+            var from = _dataSet.Seeds.Min(s => s.PrevDateUtc).AddDays(-1);
+            var to = DateTime.UtcNow.AddDays(1);
+
+            foreach (var plant in _dataSet.Seeds.Select(s => s.PlantCode).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                var expectedList = snapshot.Expectations
+                    .Where(e => string.Equals(e.Seed.PlantCode, plant, StringComparison.OrdinalIgnoreCase))
+                    .Select(e => e.ExpectedCr)
+                    .ToList();
+                if (expectedList.Count == 0) continue;
+
+                var dto = await svc.GetPlantCrAsync(plant, from, to, CancellationToken.None);
+                var expMean = expectedList.Average();
+                var sorted = expectedList.OrderBy(x => x).ToArray();
+                var idx = (int)Math.Ceiling(0.9m * sorted.Length) - 1;
+                idx = Math.Clamp(idx, 0, sorted.Length - 1);
+                var expP90 = sorted[idx];
+
+                if (!IsClose(expMean, dto.CrMean ?? 0) || !IsClose(expP90, dto.CrP90 ?? 0))
+                {
+                    return new TestResult(testName, false,
+                        $"Плант {plant}: ожидалось mean={expMean:F4}, p90={expP90:F4}, получено mean={dto.CrMean}, p90={dto.CrP90}");
+                }
+            }
+
+            return new TestResult(testName, true);
+        }
+        catch (Exception ex)
+        {
+            return new TestResult(testName, false, ex.Message);
+        }
+    }
+
+    private static bool IsClose(decimal expected, decimal actual)
+    {
+        return Math.Abs(expected - actual) <= 0.001m;
     }
 }
 

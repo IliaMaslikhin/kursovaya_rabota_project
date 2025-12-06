@@ -22,6 +22,7 @@ public sealed class KernelGateway
     private KernelGateway(IStoragePort storage, bool isLive, string statusMessage, BootstrapResult? bootstrapInfo, StorageConfig? storageConfig)
     {
         Storage = storage;
+        StorageFactory = new StoragePortFactory(storage);
         IsLive = isLive;
         StatusMessage = statusMessage;
         BootstrapInfo = bootstrapInfo;
@@ -29,6 +30,7 @@ public sealed class KernelGateway
     }
 
     public IStoragePort Storage { get; }
+    public StoragePortFactory StorageFactory { get; }
 
     public bool IsLive { get; }
 

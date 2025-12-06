@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Npgsql;
+using OilErp.Core.Dto;
 
 namespace OilErp.Bootstrap;
 

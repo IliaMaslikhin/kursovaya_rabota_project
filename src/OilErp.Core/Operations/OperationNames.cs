@@ -83,6 +83,11 @@ public static class OperationNames
         /// </summary>
         public const string AnalyticsTopAssetsByCr = "public.fn_top_assets_by_cr";
 
+        /// <summary>
+        /// Plant CR stats: public.fn_plant_cr_stats(p_plant text, p_from timestamptz, p_to timestamptz)
+        /// </summary>
+        public const string AnalyticsPlantCrStats = "public.fn_plant_cr_stats";
+
         // Procedures (CALL ...)
 
         /// <summary>

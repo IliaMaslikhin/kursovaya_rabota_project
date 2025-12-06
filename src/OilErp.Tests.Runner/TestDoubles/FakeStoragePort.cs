@@ -80,12 +80,24 @@ public class FakeStoragePort : IStoragePort
     }
 
     /// <inheritdoc />
-    public Task<IAsyncDisposable> BeginTransactionAsync(CancellationToken ct = default)
+    public Task<IStorageTransaction> BeginTransactionAsync(CancellationToken ct = default)
     {
         IncrementCallCount(nameof(BeginTransactionAsync));
         var transaction = new FakeTransaction();
         _transactions.Add(transaction);
-        return Task.FromResult<IAsyncDisposable>(transaction);
+        return Task.FromResult<IStorageTransaction>(transaction);
+    }
+
+    public Task SubscribeAsync(string channel, CancellationToken ct = default)
+    {
+        IncrementCallCount(nameof(SubscribeAsync));
+        return Task.CompletedTask;
+    }
+
+    public Task UnsubscribeAsync(string channel, CancellationToken ct = default)
+    {
+        IncrementCallCount(nameof(UnsubscribeAsync));
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
@@ -129,7 +141,7 @@ public class FakeStoragePort : IStoragePort
 /// <summary>
 /// Fake transaction implementation
 /// </summary>
-public class FakeTransaction : IAsyncDisposable
+public class FakeTransaction : IStorageTransaction
 {
     /// <summary>
     /// Gets whether the transaction was committed
@@ -149,7 +161,7 @@ public class FakeTransaction : IAsyncDisposable
     /// <summary>
     /// Commits the transaction
     /// </summary>
-    public void Commit()
+    public Task CommitAsync(CancellationToken ct = default)
     {
         if (IsDisposed)
             throw new InvalidOperationException("Transaction is already disposed");
@@ -157,17 +169,19 @@ public class FakeTransaction : IAsyncDisposable
             throw new InvalidOperationException("Cannot commit after rollback");
         
         IsCommitted = true;
+        return Task.CompletedTask;
     }
 
     /// <summary>
     /// Rolls back the transaction
     /// </summary>
-    public void Rollback()
+    public Task RollbackAsync(CancellationToken ct = default)
     {
         if (IsDisposed)
             throw new InvalidOperationException("Transaction is already disposed");
         
         IsRolledBack = true;
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />

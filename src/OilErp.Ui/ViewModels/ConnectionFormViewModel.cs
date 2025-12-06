@@ -10,16 +10,19 @@ public sealed partial class ConnectionFormViewModel : ObservableObject
 {
     private readonly Func<string, Task> connectAction;
 
-    public ConnectionFormViewModel(Func<string, Task> connectAction)
+    public ConnectionFormViewModel(Func<string, Task> connectAction, string? defaultConnection = null)
     {
         this.connectAction = connectAction;
-        connectionString = string.Empty;
+        connectionString = defaultConnection ?? string.Empty;
         host = "localhost";
         database = "central";
         username = "postgres";
         password = "postgres";
         timeoutSec = 30;
-        statusMessage = "Введите строку подключения или соберите её из полей ниже.";
+        statusMessage = string.IsNullOrWhiteSpace(defaultConnection)
+            ? "Введите строку подключения или соберите её из полей ниже."
+            : "Найдена строка подключения из окружения.";
+        useCustomString = !string.IsNullOrWhiteSpace(defaultConnection);
     }
 
     [ObservableProperty] private bool useCustomString;

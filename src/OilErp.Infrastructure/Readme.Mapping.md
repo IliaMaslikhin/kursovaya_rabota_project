@@ -17,6 +17,7 @@
 | `Central.EvalRisk` | `public.fn_eval_risk` | Query | SET | `p_asset_code text, p_policy_name text DEFAULT 'default'` |
 | `Central.AnalyticsAssetSummary` | `public.fn_asset_summary_json` | Query | JSON | `p_asset_code text, p_policy_name text DEFAULT 'default'` |
 | `Central.AnalyticsTopAssetsByCr` | `public.fn_top_assets_by_cr` | Query | SET | `p_limit int DEFAULT 50` |
+| `Central.AnalyticsPlantCrStats` | `public.fn_plant_cr_stats` | Query | SET | `p_plant text, p_from timestamptz, p_to timestamptz` |
 | `Central.SpIngestEvents` | `public.sp_ingest_events` | Command | VOID | `p_limit int DEFAULT 1000` |
 | `Central.SpEventsEnqueue` | `public.sp_events_enqueue` | Command | VOID | `p_event_type text, p_source_plant text, p_payload jsonb` |
 | `Central.SpEventsRequeue` | `public.sp_events_requeue` | Command | VOID | `p_ids bigint[]` |

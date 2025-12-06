@@ -263,3 +263,22 @@ AS $$
   ORDER BY cr DESC NULLS LAST
   LIMIT GREATEST(1, p_limit);
 $$;
+
+-- 11) plant cr stats
+CREATE OR REPLACE FUNCTION public.fn_plant_cr_stats(
+  p_plant text,
+  p_from timestamptz,
+  p_to timestamptz
+) RETURNS TABLE(cr_mean numeric, cr_p90 numeric, assets_count int)
+LANGUAGE sql
+AS $$
+  SELECT
+    avg(ac.cr) AS cr_mean,
+    percentile_cont(0.9) WITHIN GROUP (ORDER BY ac.cr) AS cr_p90,
+    count(*) AS assets_count
+  FROM public.analytics_cr ac
+  JOIN public.assets_global ag ON ag.asset_code = ac.asset_code
+  WHERE (p_plant IS NULL OR lower(ag.plant_code) = lower(p_plant))
+    AND ac.updated_at BETWEEN p_from AND p_to
+    AND ac.cr IS NOT NULL;
+$$;

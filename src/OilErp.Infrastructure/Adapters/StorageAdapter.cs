@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Diagnostics;
 using System.Text;
 using OilErp.Core.Abstractions;
+using OilErp.Core.Contracts;
 using OilErp.Core.Dto;
 using OilErp.Infrastructure.Config;
 using Npgsql;
@@ -34,9 +35,12 @@ public class StorageAdapter : DbClientBase
 
     private static StorageConfig BuildConfigFromEnv()
     {
-        var cs = Environment.GetEnvironmentVariable("OIL_ERP_PG")
+        var cs = Environment.GetEnvironmentVariable("OILERP__DB__CONN")
+                 ?? Environment.GetEnvironmentVariable("OIL_ERP_PG")
                  ?? "Host=localhost;Username=postgres;Password=postgres;Database=postgres";
-        var timeout = int.TryParse(Environment.GetEnvironmentVariable("OIL_ERP_PG_TIMEOUT"), out var t) ? t : 30;
+        var timeoutVar = Environment.GetEnvironmentVariable("OILERP__DB__TIMEOUT_SEC")
+                         ?? Environment.GetEnvironmentVariable("OIL_ERP_PG_TIMEOUT");
+        var timeout = int.TryParse(timeoutVar, out var t) ? t : 30;
         return new StorageConfig(cs, timeout);
     }
 
@@ -171,7 +175,7 @@ public class StorageAdapter : DbClientBase
     }
 
     /// <inheritdoc />
-    public override async Task<IAsyncDisposable> BeginTransactionAsync(CancellationToken ct = default)
+    public override async Task<IStorageTransaction> BeginTransactionAsync(CancellationToken ct = default)
     {
         if (_currentTx.Value != null)
             throw new InvalidOperationException("Transaction already started in this async context");
@@ -185,12 +189,18 @@ public class StorageAdapter : DbClientBase
     }
 
     /// <inheritdoc />
+    public override Task SubscribeAsync(string channel, CancellationToken ct = default) => SubscribeInternalAsync(channel, ct);
+
+    /// <inheritdoc />
+    public override Task UnsubscribeAsync(string channel, CancellationToken ct = default) => UnsubscribeInternalAsync(channel, ct);
+
+    /// <inheritdoc />
     public override event EventHandler<DbNotification>? Notified;
 
     /// <summary>
     /// Подписка на LISTEN канал (соединение живёт в фоне)
     /// </summary>
-    public async Task SubscribeAsync(string channel, CancellationToken ct = default)
+    private async Task SubscribeInternalAsync(string channel, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(channel)) throw new ArgumentNullException(nameof(channel));
         await EnsureListenerAsync(ct);
@@ -204,7 +214,7 @@ public class StorageAdapter : DbClientBase
     /// <summary>
     /// Отписка от LISTEN канала
     /// </summary>
-    public async Task UnsubscribeAsync(string channel, CancellationToken ct = default)
+    private async Task UnsubscribeInternalAsync(string channel, CancellationToken ct = default)
     {
         if (_listenConn == null) return;
         await using var cmd = _listenConn.CreateCommand();
@@ -454,7 +464,7 @@ order by p.oid desc limit 1";
     /// <summary>
     /// Обертка над NpgsqlTransaction с асинхронными Commit/Rollback и сейвпоинтами
     /// </summary>
-    private sealed class PgTransactionScope : IAsyncDisposable
+    private sealed class PgTransactionScope : IStorageTransaction
     {
         public NpgsqlConnection Connection { get; }
         public NpgsqlTransaction Transaction { get; }

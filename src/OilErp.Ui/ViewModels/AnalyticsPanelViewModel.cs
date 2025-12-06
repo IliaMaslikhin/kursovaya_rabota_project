@@ -70,21 +70,23 @@ public sealed partial class AnalyticsPanelViewModel : ObservableObject
             Items.Clear();
             var topService = new FnTopAssetsByCrService(storage);
             var summaryService = new FnAssetSummaryJsonService(storage);
+            AppLogger.Info("[ui] analytics load start");
             var rows = await topService.fn_top_assets_by_crAsync(100, CancellationToken.None);
 
             foreach (var row in rows)
             {
                 var asset = Read(row, "asset_code") ?? "UNKNOWN";
-                var plant = Read(row, "plant_code") ?? "CENTRAL";
                 var cr = ReadDecimal(row, "cr");
                 var updated = Read(row, "updated_at");
                 DateTime? updatedAt = null;
                 if (DateTime.TryParse(updated, out var parsed)) updatedAt = parsed;
 
                 string? risk = null;
+                string plant = "CENTRAL";
                 try
                 {
                     var summary = await summaryService.fn_asset_summary_jsonAsync(asset, "default", CancellationToken.None);
+                    plant = summary?.Asset.PlantCode ?? plant;
                     risk = summary?.Risk?.Level;
                 }
                 catch

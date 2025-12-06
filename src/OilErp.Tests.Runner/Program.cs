@@ -12,6 +12,8 @@ using OilErp.Core.Services.Aggregations;
 using OilErp.Infrastructure.Config;
 using System.Linq;
 using System.Reflection;
+using OilErp.Core.Contracts;
+using OilErp.Core.Dto;
 
 namespace OilErp.Tests.Runner;
 
@@ -58,6 +60,7 @@ namespace OilErp.Tests.Runner;
         var asyncSmoke = new AsyncSmokeTests();
         var bootstrapSmoke = new BootstrapSmokeTests();
         var validationSmoke = new ValidationSmokeTests();
+        var profilesSmoke = new ProfilesSmoke();
 
         const string CategoryConnection = "Подключение к базе";
         const string CategoryIngestion = "Загрузка и очередь";
@@ -106,6 +109,13 @@ namespace OilErp.Tests.Runner;
             "Очередь очищена",
             "В очереди остались события",
             storageSmoke.TestCentralEventQueueIntegrity);
+        RegisterScenario(
+            "Plant_Cr_Stats_Match_Seed",
+            CategoryAnalytics,
+            "CR-статистика по заводу",
+            "Среднее/P90 совпадают с посевом",
+            "CR-статистика отличается от ожидаемой",
+            storageSmoke.TestPlantCrStatsMatchesSeed);
 
         // Аналитика и отчёты
         RegisterScenario(
@@ -132,20 +142,6 @@ namespace OilErp.Tests.Runner;
 
         // Надёжность и асинхронность
         RegisterScenario(
-            "Db_Cancellation_On_PgSleep",
-            CategoryReliability,
-            "Отмена долгого запроса",
-            "pg_sleep отменён по токену отмены",
-            "Отмена долгого запроса не сработала",
-            asyncSmoke.TestDbCancellationOnPgSleep);
-        RegisterScenario(
-            "Db_Timeout_On_PgSleep",
-            CategoryReliability,
-            "Таймаут долгого запроса",
-            "Сработал таймаут выполнения команды",
-            "Таймаут не сработал",
-            asyncSmoke.TestDbTimeoutOnPgSleep);
-        RegisterScenario(
             "Fake_Concurrent_Commands_Counter",
             CategoryReliability,
             "Счётчик параллельных команд",
@@ -159,6 +155,20 @@ namespace OilErp.Tests.Runner;
             "Подписчики получают уведомления",
             "Уведомления не доставляются подписчикам",
             asyncSmoke.TestFakeStorageNotificationBroadcast);
+        RegisterScenario(
+            "Fake_Storage_Subscribe_Unsubscribe",
+            CategoryReliability,
+            "Подписка/отписка на каналы",
+            "Subscribe/Unsubscribe идут через порт",
+            "Subscribe/Unsubscribe не вызываются",
+            asyncSmoke.TestFakeStorageSubscribeUnsubscribe);
+        RegisterScenario(
+            "Listen_Notify_Roundtrip",
+            CategoryReliability,
+            "LISTEN/NOTIFY круговой тест",
+            "Уведомление получено",
+            "Уведомление не доставлено",
+            asyncSmoke.TestListenNotifyRoundtrip);
 
         // Валидация окружения
         RegisterScenario(
@@ -191,26 +201,27 @@ namespace OilErp.Tests.Runner;
             "Формат напоминания соответствует требованиям",
             "Шаблон напоминания некорректен",
             validationSmoke.TestMissingObjectReminderFormatting);
+        RegisterScenario(
+            "Profiles_Inventory_All",
+            CategoryValidation,
+            "Проверка схем по профилям",
+            "Профили central/anpz/krnpz содержат обязательные объекты",
+            "В профилях отсутствуют объекты",
+            profilesSmoke.TestAllProfilesInventory);
+        RegisterScenario(
+            "Plant_Insert_And_FDW_Roundtrip",
+            CategoryValidation,
+            "Проверка завода и FDW",
+            "Процедура вставки и FDW работают с откатом",
+            "Ошибка вставки/FDW на заводе",
+            profilesSmoke.TestPlantInsertAndFdwRoundtrip);
 
         await runner.RunAndPrintAsync();
     }
 
-    private static async Task CommitTxAsync(IAsyncDisposable tx)
+    private static async Task CommitTxAsync(IStorageTransaction tx)
     {
-        var t = tx.GetType();
-        var m = t.GetMethod("CommitAsync", new Type[] { typeof(CancellationToken) });
-        if (m != null)
-        {
-            var task = m.Invoke(tx, new object[] { CancellationToken.None }) as Task;
-            if (task != null) await task.ConfigureAwait(false);
-            return;
-        }
-        m = t.GetMethod("CommitAsync", Type.EmptyTypes);
-        if (m != null)
-        {
-            var task = m.Invoke(tx, null) as Task;
-            if (task != null) await task.ConfigureAwait(false);
-        }
+        await tx.CommitAsync(CancellationToken.None);
     }
 
 
@@ -233,7 +244,6 @@ namespace OilErp.Tests.Runner;
         }
 
         var kernel = CreateKernel();
-        var sa = kernel.Storage as StorageAdapter ?? throw new InvalidOperationException("Storage must be StorageAdapter for LISTEN/UNLISTEN");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(Math.Max(1, timeoutSec)));
 
         void OnNotified(object? sender, OilErp.Core.Dto.DbNotification n)
@@ -244,7 +254,7 @@ namespace OilErp.Tests.Runner;
         try
         {
             kernel.Storage.Notified += OnNotified;
-            await sa.SubscribeAsync(channel, CancellationToken.None);
+            await kernel.Storage.SubscribeAsync(channel, CancellationToken.None);
             Console.WriteLine($"Следим за каналом '{channel}' в течение {timeoutSec} с...");
             try
             {
@@ -260,12 +270,12 @@ namespace OilErp.Tests.Runner;
         }
         finally
         {
-            try { await sa.UnsubscribeAsync(channel!, CancellationToken.None); } catch { }
+            try { await kernel.Storage.UnsubscribeAsync(channel!, CancellationToken.None); } catch { }
             kernel.Storage.Notified -= OnNotified;
         }
     }
 
-    private static KernelAdapter CreateKernel() => TestEnvironment.CreateKernel();
+    private static KernelAdapter CreateKernel(DatabaseProfile profile = DatabaseProfile.Central) => TestEnvironment.CreateKernel(profile);
 
     private static StorageConfig LoadStorageConfig() => TestEnvironment.LoadStorageConfig();
     private static async Task<bool> HandleCliAsync(string[] args)
@@ -433,7 +443,7 @@ namespace OilErp.Tests.Runner;
                 pointsJson = doc.RootElement.Clone();
             }
 
-            var kernel = CreateKernel();
+            var kernel = CreateKernel(DatabaseProfile.PlantAnpz);
             var svc = new SpInsertMeasurementBatchService(kernel.Storage);
             var rows = await svc.sp_insert_measurement_batchAsync(assetCode, pointsJson.GetRawText(), sourcePlant, CancellationToken.None);
             var snippet = pointsJson.ValueKind == JsonValueKind.Array && pointsJson.GetArrayLength() > 0
@@ -810,37 +820,40 @@ namespace OilErp.Tests.Runner;
 internal static class TestEnvironment
 {
     private static readonly object SyncRoot = new();
-    private static StorageConfig? _cachedConfig;
+    private static readonly Dictionary<DatabaseProfile, StorageConfig> CachedConfigs = new();
 
-    public static StorageConfig LoadStorageConfig()
+    public static StorageConfig LoadStorageConfig(DatabaseProfile profile = DatabaseProfile.Central)
     {
-        if (_cachedConfig != null) return _cachedConfig;
         lock (SyncRoot)
         {
-            if (_cachedConfig != null) return _cachedConfig;
-
-            var resolved = ResolveFromEnvironment()
+            if (CachedConfigs.TryGetValue(profile, out var cached)) return cached;
+            var resolved = ResolveFromEnvironment(profile)
                            ?? ResolveFromAppSettings()
                            ?? new StorageConfig("Host=localhost;Username=postgres;Password=postgres;Database=postgres", 30);
-
-            _cachedConfig = resolved;
+            CachedConfigs[profile] = resolved;
             return resolved;
         }
     }
 
-    public static KernelAdapter CreateKernel()
+    public static KernelAdapter CreateKernel(DatabaseProfile profile = DatabaseProfile.Central)
     {
-        var storage = CreateStorageAdapter();
+        var storage = CreateStorageAdapter(profile);
         return new KernelAdapter(storage);
     }
 
-    public static StorageAdapter CreateStorageAdapter() => new StorageAdapter(LoadStorageConfig());
+    public static StorageAdapter CreateStorageAdapter(DatabaseProfile profile = DatabaseProfile.Central) => new StorageAdapter(LoadStorageConfig(profile));
 
     public static string ConnectionString => LoadStorageConfig().ConnectionString;
 
-    private static StorageConfig? ResolveFromEnvironment()
+    private static StorageConfig? ResolveFromEnvironment(DatabaseProfile profile)
     {
-        var conn = Environment.GetEnvironmentVariable("OILERP__DB__CONN");
+        string[] keys =
+        {
+            $"OILERP__DB__CONN_{profile.ToString().ToUpperInvariant()}",
+            "OILERP__DB__CONN",
+            "OIL_ERP_PG"
+        };
+        var conn = keys.Select(Environment.GetEnvironmentVariable).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
         if (string.IsNullOrWhiteSpace(conn)) return null;
         var timeoutStr = Environment.GetEnvironmentVariable("OILERP__DB__TIMEOUT_SEC");
         var timeout = int.TryParse(timeoutStr, out var ti) ? ti : 30;

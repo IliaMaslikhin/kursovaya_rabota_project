@@ -4,16 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Npgsql;
+using OilErp.Core.Dto;
 
 namespace OilErp.Bootstrap;
-
-public enum DatabaseProfile
-{
-    Unknown,
-    Central,
-    PlantAnpz,
-    PlantKrnpz
-}
 
 internal sealed record DbObjectRequirement(string ObjectType, string Name);
 

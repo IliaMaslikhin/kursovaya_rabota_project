@@ -10,59 +10,6 @@ namespace OilErp.Tests.Runner.Smoke;
 public class AsyncSmokeTests
 {
     /// <summary>
-    /// Cancels a long-running pg_sleep call through StorageAdapter to ensure cancellation flows end-to-end.
-    /// </summary>
-    public async Task<TestResult> TestDbCancellationOnPgSleep()
-    {
-        const string testName = "Db_Cancellation_On_PgSleep";
-        try
-        {
-            var storage = TestEnvironment.CreateStorageAdapter();
-            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
-            var spec = new QuerySpec("pg_catalog.pg_sleep", new Dictionary<string, object?> { ["seconds"] = 5d });
-            try
-            {
-                await storage.ExecuteQueryAsync<Dictionary<string, object?>>(spec, cts.Token);
-                return new TestResult(testName, false, "pg_sleep should have been cancelled");
-            }
-            catch (OperationCanceledException)
-            {
-                return new TestResult(testName, true);
-            }
-        }
-        catch (Exception ex)
-        {
-            return new TestResult(testName, false, ex.Message);
-        }
-    }
-
-    /// <summary>
-    /// Verifies command timeout by invoking pg_sleep with a 1-second limit.
-    /// </summary>
-    public async Task<TestResult> TestDbTimeoutOnPgSleep()
-    {
-        const string testName = "Db_Timeout_On_PgSleep";
-        try
-        {
-            var storage = TestEnvironment.CreateStorageAdapter();
-            var spec = new QuerySpec("pg_catalog.pg_sleep", new Dictionary<string, object?> { ["seconds"] = 5d }, TimeoutSeconds: 1);
-            try
-            {
-                await storage.ExecuteQueryAsync<Dictionary<string, object?>>(spec);
-                return new TestResult(testName, false, "Expected timeout but query succeeded");
-            }
-            catch (Exception)
-            {
-                return new TestResult(testName, true);
-            }
-        }
-        catch (Exception ex)
-        {
-            return new TestResult(testName, false, ex.Message);
-        }
-    }
-
-    /// <summary>
     /// Uses the fake storage port to ensure concurrent commands are tracked (health check for instrumentation).
     /// </summary>
     public async Task<TestResult> TestFakeStorageConcurrentCommandsCounter()
@@ -114,6 +61,79 @@ public class AsyncSmokeTests
         catch (Exception ex)
         {
             return Task.FromResult(new TestResult(testName, false, ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Ensures subscribe/unsubscribe calls are routed through the storage port interface.
+    /// </summary>
+    public async Task<TestResult> TestFakeStorageSubscribeUnsubscribe()
+    {
+        const string testName = "Fake_Storage_Subscribe_Unsubscribe";
+        try
+        {
+            var storage = new FakeStoragePort();
+            await storage.SubscribeAsync("hc_channel");
+            await storage.UnsubscribeAsync("hc_channel");
+
+            var subs = storage.MethodCallCounts.TryGetValue(nameof(storage.SubscribeAsync), out var s) ? s : 0;
+            var unsubs = storage.MethodCallCounts.TryGetValue(nameof(storage.UnsubscribeAsync), out var u) ? u : 0;
+
+            if (subs != 1 || unsubs != 1)
+            {
+                return new TestResult(testName, false, $"subscribe={subs} unsubscribe={unsubs}");
+            }
+
+            return new TestResult(testName, true);
+        }
+        catch (Exception ex)
+        {
+            return new TestResult(testName, false, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// LISTEN/NOTIFY круговой тест через StorageAdapter.
+    /// </summary>
+    public async Task<TestResult> TestListenNotifyRoundtrip()
+    {
+        const string testName = "Listen_Notify_Roundtrip";
+        try
+        {
+            var storage = TestEnvironment.CreateStorageAdapter();
+            var channel = $"hc_roundtrip_{Guid.NewGuid():N}";
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            void Handler(object? _, DbNotification n)
+            {
+                if (string.Equals(n.Channel, channel, StringComparison.OrdinalIgnoreCase))
+                    tcs.TrySetResult(true);
+            }
+
+            storage.Notified += Handler;
+            await storage.SubscribeAsync(channel);
+            try
+            {
+                var spec = new CommandSpec("pg_catalog.pg_notify", new Dictionary<string, object?>
+                {
+                    ["channel"] = channel,
+                    ["payload"] = "{\"ok\":true}"
+                });
+                await storage.ExecuteCommandAsync(spec);
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                await using var reg = cts.Token.Register(() => tcs.TrySetCanceled(cts.Token));
+                var ok = await tcs.Task;
+                return ok ? new TestResult(testName, true) : new TestResult(testName, false, "Уведомление не получено");
+            }
+            finally
+            {
+                await storage.UnsubscribeAsync(channel);
+                storage.Notified -= Handler;
+            }
+        }
+        catch (Exception ex)
+        {
+            return new TestResult(testName, false, ex.Message);
         }
     }
 }

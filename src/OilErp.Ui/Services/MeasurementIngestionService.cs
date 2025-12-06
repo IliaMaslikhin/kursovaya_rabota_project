@@ -18,16 +18,15 @@ namespace OilErp.Ui.Services;
 /// </summary>
 public sealed class MeasurementIngestionService
 {
-    private readonly IStoragePort storage;
+    private readonly StoragePortFactory factory;
 
-    public MeasurementIngestionService(IStoragePort storage)
+    public MeasurementIngestionService(StoragePortFactory factory)
     {
-        this.storage = storage;
+        this.factory = factory ?? throw new ArgumentNullException(nameof(factory));
     }
 
     public async Task<MeasurementSubmissionResult> IngestAsync(
         AddMeasurementRequest request,
-        DatabaseProfile? profile,
         CancellationToken ct)
     {
         var plant = NormalizePlant(request.Plant);
@@ -37,20 +36,22 @@ public sealed class MeasurementIngestionService
         try
         {
             AppLogger.Info($"[ui] ingest замера asset={asset} plant={plant}");
-            var affected = await ExecutePlantCommandAsync(plant, asset, payload, ct);
+            var storage = factory.ForPlant(plant);
+            await using var tx = await storage.BeginTransactionAsync(ct);
+            var affected = await ExecutePlantCommandAsync(storage, plant, asset, payload, ct);
+            await tx.CommitAsync(ct);
             AppLogger.Info($"[ui] ingest завершен asset={asset} plant={plant} rows={affected}");
             return new MeasurementSubmissionResult(true, $"Записано в БД ({affected}) для {plant} · {asset}.", true);
         }
         catch (Exception ex)
         {
-            var profileHint = profile.HasValue ? $" профиль {profile}" : " профиль неизвестен";
-            var message = $"Не удалось сохранить в БД для {plant} ({profileHint}): {ex.Message}";
+            var message = $"Не удалось сохранить в БД для {plant}: {ex.Message}";
             AppLogger.Error($"[ui] ingest ошибка asset={asset} plant={plant}: {ex.Message}");
-            return new MeasurementSubmissionResult(true, message, false);
+            return new MeasurementSubmissionResult(false, message, false);
         }
     }
 
-    private async Task<int> ExecutePlantCommandAsync(string plant, string assetCode, string pointsJson, CancellationToken ct)
+    private async Task<int> ExecutePlantCommandAsync(IStoragePort storage, string plant, string assetCode, string pointsJson, CancellationToken ct)
     {
         if (string.Equals(plant, "KRNPZ", StringComparison.OrdinalIgnoreCase))
         {
