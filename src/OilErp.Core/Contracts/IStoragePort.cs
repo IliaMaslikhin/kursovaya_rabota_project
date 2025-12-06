@@ -54,4 +54,19 @@ public interface IStorageTransaction : IAsyncDisposable
 {
     Task CommitAsync(CancellationToken ct = default);
     Task RollbackAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Создать сейвпоинт в открытой транзакции.
+    /// </summary>
+    Task CreateSavepointAsync(string name, CancellationToken ct = default);
+
+    /// <summary>
+    /// Откатиться к сейвпоинту, не закрывая транзакцию.
+    /// </summary>
+    Task RollbackToSavepointAsync(string name, CancellationToken ct = default);
+
+    /// <summary>
+    /// Освободить сейвпоинт после успешной ветки.
+    /// </summary>
+    Task ReleaseSavepointAsync(string name, CancellationToken ct = default);
 }

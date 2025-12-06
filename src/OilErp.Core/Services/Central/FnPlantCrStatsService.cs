@@ -12,7 +12,7 @@ public class FnPlantCrStatsService : AppServiceBase
 {
     public FnPlantCrStatsService(IStoragePort storage) : base(storage) { }
 
-    public async Task<IReadOnlyList<Dictionary<string, object?>>> fn_plant_cr_statsAsync(
+    public async Task<IReadOnlyList<PlantCrStatDto>> fn_plant_cr_statsAsync(
         string plant,
         DateTime from,
         DateTime to,
@@ -26,6 +26,24 @@ public class FnPlantCrStatsService : AppServiceBase
                 ["p_from"] = from,
                 ["p_to"] = to
             });
-        return await Storage.ExecuteQueryAsync<Dictionary<string, object?>>(spec, ct);
+        var rows = await Storage.ExecuteQueryAsync<Dictionary<string, object?>>(spec, ct);
+        return rows
+            .Select(static r => new PlantCrStatDto(
+                TryDecimal(r, "cr_mean"),
+                TryDecimal(r, "cr_p90"),
+                TryInt(r, "assets_count")))
+            .ToList();
+    }
+
+    private static decimal? TryDecimal(IReadOnlyDictionary<string, object?> row, string name)
+    {
+        if (!row.TryGetValue(name, out var v) || v is null) return null;
+        try { return Convert.ToDecimal(v); } catch { return null; }
+    }
+
+    private static int TryInt(IReadOnlyDictionary<string, object?> row, string name)
+    {
+        if (!row.TryGetValue(name, out var v) || v is null) return 0;
+        try { return Convert.ToInt32(v); } catch { return 0; }
     }
 }

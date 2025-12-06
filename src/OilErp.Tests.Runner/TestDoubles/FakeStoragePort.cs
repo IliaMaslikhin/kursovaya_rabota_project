@@ -184,6 +184,10 @@ public class FakeTransaction : IStorageTransaction
         return Task.CompletedTask;
     }
 
+    public Task CreateSavepointAsync(string name, CancellationToken ct = default) => Task.CompletedTask;
+    public Task RollbackToSavepointAsync(string name, CancellationToken ct = default) => Task.CompletedTask;
+    public Task ReleaseSavepointAsync(string name, CancellationToken ct = default) => Task.CompletedTask;
+
     /// <inheritdoc />
     public ValueTask DisposeAsync()
     {

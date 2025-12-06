@@ -42,4 +42,10 @@
     <ProjectReference Include="..\OilErp.Core\OilErp.Core.csproj" />
     <ProjectReference Include="..\OilErp.Infrastructure\OilErp.Infrastructure.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Services\AppLogger.cs">
+      <DependentUpon></DependentUpon>
+    </Compile>
+  </ItemGroup>
 </Project>

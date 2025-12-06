@@ -3,7 +3,7 @@ using System.IO;
 
 namespace OilErp.Bootstrap;
 
-internal static class FirstRunTracker
+public static class FirstRunTracker
 {
     private static readonly string MarkerDir =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OilErp");

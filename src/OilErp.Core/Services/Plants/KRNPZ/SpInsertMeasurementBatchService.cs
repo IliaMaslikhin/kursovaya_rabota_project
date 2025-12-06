@@ -18,6 +18,9 @@ public class SpInsertMeasurementBatchService : AppServiceBase
         string p_source_plant,
         CancellationToken ct = default)
     {
+        p_asset_code = NormalizeCode(p_asset_code);
+        p_source_plant = NormalizePlant(p_source_plant) ?? "KRNPZ";
+
         var spec = new CommandSpec(
             OperationNames.Plant.MeasurementsInsertBatch,
             new Dictionary<string, object?>
@@ -30,4 +33,3 @@ public class SpInsertMeasurementBatchService : AppServiceBase
         return await Storage.ExecuteCommandAsync(spec, ct);
     }
 }
-

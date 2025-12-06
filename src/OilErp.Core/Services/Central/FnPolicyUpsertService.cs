@@ -19,6 +19,8 @@ public class FnPolicyUpsertService : AppServiceBase
         decimal p_high,
         CancellationToken ct = default)
     {
+        p_name = NormalizeOptional(p_name) ?? throw new ArgumentNullException(nameof(p_name));
+
         var spec = new CommandSpec(
             OperationNames.Central.PolicyUpsert,
             new Dictionary<string, object?>
@@ -32,4 +34,3 @@ public class FnPolicyUpsertService : AppServiceBase
         return await Storage.ExecuteCommandAsync(spec, ct);
     }
 }
-

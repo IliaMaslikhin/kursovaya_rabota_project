@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using OilErp.Bootstrap;
 using OilErp.Core.Contracts;
 using OilErp.Core.Dto;
 using OilErp.Core.Services.Central;
+using OilErp.Core.Services.Dtos;
 using OilErp.Ui.Models;
 
 namespace OilErp.Ui.Services;
@@ -24,11 +26,12 @@ public sealed class MeasurementDataProvider
         this.fallbackSnapshots = fallbackSnapshots;
     }
 
-    public MeasurementDataResult Load()
+    public async Task<MeasurementDataResult> LoadAsync(CancellationToken ct = default)
     {
         AppLogger.Info("[ui] загрузка данных для UI");
-        using var cts = new CancellationTokenSource(LiveLoadTimeout);
-        var series = LoadFromKernel(cts.Token);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(LiveLoadTimeout);
+        var series = await LoadFromKernelAsync(cts.Token);
         if (series.Count > 0)
         {
             AppLogger.Info($"[ui] получено {series.Count} рядов из БД");
@@ -40,25 +43,24 @@ public sealed class MeasurementDataProvider
         return new MeasurementDataResult(fallbackSnapshots.LoadSeries(), "БД пуста, загружены резервные JSON-добивки.");
     }
 
-    private IReadOnlyList<MeasurementSeries> LoadFromKernel(CancellationToken ct)
+    private async Task<IReadOnlyList<MeasurementSeries>> LoadFromKernelAsync(CancellationToken ct)
     {
         var topService = new FnTopAssetsByCrService(storage);
         var summaryService = new FnAssetSummaryJsonService(storage);
 
-        var topAssets = topService.fn_top_assets_by_crAsync(12, ct).GetAwaiter().GetResult();
+        var topAssets = await topService.fn_top_assets_by_crAsync(12, ct);
         var result = new List<MeasurementSeries>();
         foreach (var row in topAssets)
         {
             ct.ThrowIfCancellationRequested();
-
-            var assetCode = ReadString(row, "asset_code", "asset");
+            var assetCode = row.AssetCode;
             if (string.IsNullOrWhiteSpace(assetCode))
             {
                 continue;
             }
 
-            var plant = ReadString(row, "plant_code", "plant") ?? "CENTRAL";
-            var summary = summaryService.fn_asset_summary_jsonAsync(assetCode, "default", ct).GetAwaiter().GetResult();
+            var plant = "CENTRAL";
+            var summary = await summaryService.fn_asset_summary_jsonAsync(assetCode, "default", ct);
             var points = BuildPointsFromSummary(assetCode, summary, row);
             if (points.Count == 0)
             {
@@ -74,7 +76,7 @@ public sealed class MeasurementDataProvider
     private static List<MeasurementPointDto> BuildPointsFromSummary(
         string assetCode,
         Core.Services.Dtos.AssetSummaryDto? summary,
-        IReadOnlyDictionary<string, object?> rowFallback)
+        TopAssetCrDto rowFallback)
     {
         var points = new List<MeasurementPointDto>();
         var analytics = summary?.Analytics;
@@ -90,8 +92,8 @@ public sealed class MeasurementDataProvider
 
         if (points.Count == 0)
         {
-            var lastThickness = ReadDecimal(rowFallback, "last_thk");
-            var fallbackDate = ReadDate(rowFallback, "last_date");
+            var lastThickness = rowFallback.Cr;
+            var fallbackDate = rowFallback.UpdatedAt;
             if (lastThickness is not null && fallbackDate is not null)
             {
                 points.Add(new MeasurementPointDto($"{assetCode}-last", fallbackDate.Value, lastThickness.Value, "Данные top_assets_by_cr"));
@@ -101,43 +103,6 @@ public sealed class MeasurementDataProvider
         return points;
     }
 
-    private static string? ReadString(IReadOnlyDictionary<string, object?> row, params string[] names)
-    {
-        foreach (var name in names)
-        {
-            if (row.TryGetValue(name, out var value) && value is not null)
-            {
-                return value.ToString();
-            }
-
-            var kvp = row.FirstOrDefault(p => string.Equals(p.Key, name, StringComparison.OrdinalIgnoreCase));
-            if (!string.IsNullOrEmpty(kvp.Key) && kvp.Value is not null)
-            {
-                return kvp.Value.ToString();
-            }
-        }
-        return null;
-    }
-
-    private static decimal? ReadDecimal(IReadOnlyDictionary<string, object?> row, params string[] names)
-    {
-        var value = ReadString(row, names);
-        if (decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result))
-        {
-            return result;
-        }
-        return null;
-    }
-
-    private static DateTime? ReadDate(IReadOnlyDictionary<string, object?> row, params string[] names)
-    {
-        var value = ReadString(row, names);
-        if (DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var result))
-        {
-            return result;
-        }
-        return null;
-    }
 }
 
 public sealed record MeasurementDataResult(IReadOnlyList<MeasurementSeries> Series, string StatusMessage);

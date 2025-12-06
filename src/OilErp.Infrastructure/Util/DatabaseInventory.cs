@@ -8,24 +8,24 @@ using OilErp.Core.Dto;
 
 namespace OilErp.Bootstrap;
 
-internal sealed record DbObjectRequirement(string ObjectType, string Name);
+public sealed record DbObjectRequirement(string ObjectType, string Name, string? Signature = null);
 
-internal sealed record InventorySnapshot(
+public sealed record InventorySnapshot(
     HashSet<string> Functions,
     HashSet<string> Procedures,
     HashSet<string> Tables,
     HashSet<string> Triggers);
 
-internal sealed record InventoryVerification(bool Success, string? ErrorMessage)
+public sealed record InventoryVerification(bool Success, string? ErrorMessage)
 {
     public static InventoryVerification Ok() => new(true, null);
     public static InventoryVerification Fail(string message) => new(false, message);
 }
 
 /// <summary>
-/// Инвентаризация объектов БД для UI-инициализации.
+/// Инвентаризация объектов БД для UI/Tests/Infra.
 /// </summary>
-internal sealed class DatabaseInventoryInspector
+public sealed class DatabaseInventoryInspector
 {
     private readonly string _connectionString;
     public DatabaseProfile Profile { get; }
@@ -60,13 +60,24 @@ internal sealed class DatabaseInventoryInspector
             }
         }
 
-        if (missing.Count == 0)
+        var signatureIssues = await FindSignatureMismatchesAsync(expected);
+
+        if (missing.Count == 0 && signatureIssues.Count == 0)
         {
             return InventoryVerification.Ok();
         }
 
-        var reminder = FormatReminder(missing);
-        return InventoryVerification.Fail(reminder);
+        var parts = new List<string>();
+        if (missing.Count > 0)
+        {
+            parts.Add(FormatReminder(missing));
+        }
+        if (signatureIssues.Count > 0)
+        {
+            parts.Add("Signature mismatches: " + string.Join("; ", signatureIssues));
+        }
+
+        return InventoryVerification.Fail(string.Join(" | ", parts));
     }
 
     public void PrintSummary()
@@ -181,24 +192,24 @@ internal sealed class DatabaseInventoryInspector
         {
             DatabaseProfile.Central => new List<DbObjectRequirement>
             {
-                new("function", "public.fn_calc_cr"),
-                new("function", "public.fn_asset_upsert"),
-                new("function", "public.fn_policy_upsert"),
-                new("function", "public.fn_events_enqueue"),
-                new("function", "public.fn_events_peek"),
-                new("function", "public.fn_ingest_events"),
-                new("function", "public.fn_events_requeue"),
-                new("function", "public.fn_events_cleanup"),
-                new("function", "public.fn_eval_risk"),
-                new("function", "public.fn_asset_summary_json"),
-                new("function", "public.fn_top_assets_by_cr"),
-                new("function", "public.fn_plant_cr_stats"),
-                new("procedure", "public.sp_ingest_events"),
-                new("procedure", "public.sp_events_enqueue"),
-                new("procedure", "public.sp_events_requeue"),
-                new("procedure", "public.sp_events_cleanup"),
-                new("procedure", "public.sp_policy_upsert"),
-                new("procedure", "public.sp_asset_upsert"),
+                new("function", "public.fn_calc_cr", "prev_thk numeric, prev_date timestamp with time zone, last_thk numeric, last_date timestamp with time zone"),
+                new("function", "public.fn_asset_upsert", "p_asset_code text, p_name text, p_type text, p_plant_code text"),
+                new("function", "public.fn_policy_upsert", "p_name text, p_low numeric, p_med numeric, p_high numeric"),
+                new("function", "public.fn_events_enqueue", "p_event_type text, p_source_plant text, p_payload jsonb"),
+                new("function", "public.fn_events_peek", "p_limit integer"),
+                new("function", "public.fn_ingest_events", "p_limit integer"),
+                new("function", "public.fn_events_requeue", "p_ids bigint[]"),
+                new("function", "public.fn_events_cleanup", "p_older_than interval"),
+                new("function", "public.fn_eval_risk", "p_asset_code text, p_policy_name text"),
+                new("function", "public.fn_asset_summary_json", "p_asset_code text, p_policy_name text"),
+                new("function", "public.fn_top_assets_by_cr", "p_limit integer"),
+                new("function", "public.fn_plant_cr_stats", "p_plant text, p_from timestamp with time zone, p_to timestamp with time zone"),
+                new("procedure", "public.sp_ingest_events", "p_limit integer, OUT processed integer"),
+                new("procedure", "public.sp_events_enqueue", "p_event_type text, p_source_plant text, p_payload jsonb, OUT p_id bigint"),
+                new("procedure", "public.sp_events_requeue", "p_ids bigint[], OUT n integer"),
+                new("procedure", "public.sp_events_cleanup", "p_older_than interval, OUT n integer"),
+                new("procedure", "public.sp_policy_upsert", "p_name text, p_low numeric, p_med numeric, p_high numeric, OUT p_id bigint"),
+                new("procedure", "public.sp_asset_upsert", "p_asset_code text, p_name text, p_type text, p_plant_code text, OUT p_id bigint"),
                 new("table", "public.assets_global"),
                 new("table", "public.risk_policies"),
                 new("table", "public.analytics_cr"),
@@ -206,8 +217,8 @@ internal sealed class DatabaseInventoryInspector
             },
             DatabaseProfile.PlantAnpz or DatabaseProfile.PlantKrnpz => new List<DbObjectRequirement>
             {
-                new("function", "public.sp_insert_measurement_batch"),
-                new("procedure", "public.sp_insert_measurement_batch_prc"),
+                new("function", "public.sp_insert_measurement_batch", "p_asset_code text, p_points jsonb, p_source_plant text"),
+                new("procedure", "public.sp_insert_measurement_batch_prc", "p_asset_code text, p_points jsonb, p_source_plant text, OUT p_inserted integer"),
                 new("function", "public.trg_measurements_ai_fn"),
                 new("trigger", "public.trg_measurements_ai"),
                 new("table", "public.assets_local"),
@@ -278,8 +289,7 @@ internal sealed class DatabaseInventoryInspector
             {
                 Path.Combine("central", "01_tables.sql"),
                 Path.Combine("central", "02_functions_core.sql"),
-                Path.Combine("central", "03_procedures.sql"),
-                Path.Combine("central", "04_function_sp_ingest_events_legacy.sql")
+                Path.Combine("central", "03_procedures.sql")
             },
             DatabaseProfile.PlantAnpz => new[]
             {
@@ -299,6 +309,61 @@ internal sealed class DatabaseInventoryInspector
             },
             _ => Array.Empty<string>()
         };
+    }
+
+    private async Task<List<string>> FindSignatureMismatchesAsync(IEnumerable<DbObjectRequirement> expected)
+    {
+        var result = new List<string>();
+        var signatureMap = await LoadRoutineSignaturesAsync();
+        foreach (var req in expected)
+        {
+            if (req.Signature is null) continue;
+            if (!signatureMap.TryGetValue(req.Name, out var actual)) continue;
+            if (!string.Equals(NormalizeSignature(actual), NormalizeSignature(req.Signature), StringComparison.OrdinalIgnoreCase))
+            {
+                result.Add($"{req.Name} expected ({req.Signature}) actual ({actual})");
+            }
+        }
+        return result;
+    }
+
+    private async Task<Dictionary<string, string>> LoadRoutineSignaturesAsync()
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        const string sql = """
+            select n.nspname || '.' || p.proname as name,
+                   coalesce(pg_get_function_identity_arguments(p.oid), '') as signature
+            from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname not in ('pg_catalog', 'information_schema')
+            """;
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var name = reader.GetString(0);
+            var sig = reader.GetString(1);
+            map[name] = sig;
+        }
+
+        return map;
+    }
+
+    private static string NormalizeSignature(string signature)
+    {
+        if (string.IsNullOrWhiteSpace(signature)) return string.Empty;
+        var cleaned = signature.ToLowerInvariant();
+        cleaned = cleaned.Replace(" ", string.Empty, StringComparison.Ordinal);
+        var idx = cleaned.IndexOf("default", StringComparison.Ordinal);
+        if (idx >= 0)
+        {
+            cleaned = cleaned.Substring(0, idx);
+        }
+        return cleaned;
     }
 
     private static string? LocateSqlRoot()

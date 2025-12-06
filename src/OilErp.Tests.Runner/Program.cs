@@ -57,10 +57,13 @@ namespace OilErp.Tests.Runner;
         var kernelSmoke = new KernelSmoke();
         var storageSmoke = new StorageSmoke();
         var extendedSmoke = new ExtendedSmokeTests();
+        var loadSmoke = new LoadSmokeTests();
         var asyncSmoke = new AsyncSmokeTests();
         var bootstrapSmoke = new BootstrapSmokeTests();
         var validationSmoke = new ValidationSmokeTests();
         var profilesSmoke = new ProfilesSmoke();
+        var negativeSmoke = new NegativeSmokeTests();
+        var listenSmoke = new ListenSmokeTests();
 
         const string CategoryConnection = "Подключение к базе";
         const string CategoryIngestion = "Загрузка и очередь";
@@ -170,6 +173,14 @@ namespace OilErp.Tests.Runner;
             "Уведомление не доставлено",
             asyncSmoke.TestListenNotifyRoundtrip);
 
+        RegisterScenario(
+            "Listen_Cancel_Unsubscribes",
+            CategoryReliability,
+            "Отмена слушателя LISTEN",
+            "Слушатель корректно закрыт",
+            "Отписка от канала не сработала",
+            listenSmoke.TestListenCancelUnsubscribes);
+
         // Валидация окружения
         RegisterScenario(
             "Database_Inventory_Matches_Expectations",
@@ -215,6 +226,30 @@ namespace OilErp.Tests.Runner;
             "Процедура вставки и FDW работают с откатом",
             "Ошибка вставки/FDW на заводе",
             profilesSmoke.TestPlantInsertAndFdwRoundtrip);
+
+        RegisterScenario(
+            "Bulk_Events_Rollback_Safe",
+            CategoryIngestion,
+            "Массовый ingest с откатом",
+            "Ingest большого батча проходит",
+            "Ingest большого батча не отработал",
+            loadSmoke.TestBulkEventsRollbackSafe);
+
+        RegisterScenario(
+            "Plant_Insert_Validation_Fails",
+            CategoryValidation,
+            "Валидация заводской функции",
+            "Ошибка при пустом asset_code",
+            "Вставка прошла без ошибки",
+            negativeSmoke.TestPlantInsertValidationFails);
+
+        RegisterScenario(
+            "Events_Enqueue_Invalid_Json",
+            CategoryValidation,
+            "Невалидный JSON для enqueue",
+            "Исключение брошено",
+            "Невалидный JSON принят",
+            negativeSmoke.TestEventsEnqueueInvalidJson);
 
         await runner.RunAndPrintAsync();
     }
@@ -381,75 +416,12 @@ namespace OilErp.Tests.Runner;
 
         try
         {
-            string assetCode;
-            string sourcePlant = "ANPZ";
-            JsonElement pointsJson;
-
-            if (Path.GetExtension(file).Equals(".json", StringComparison.OrdinalIgnoreCase))
-            {
-                using var fs = File.OpenRead(file);
-                using var doc = await JsonDocument.ParseAsync(fs);
-                var root = doc.RootElement;
-                assetCode = root.GetProperty("asset_code").GetString()!;
-                if (root.TryGetProperty("source_plant", out var sp) && sp.ValueKind == JsonValueKind.String)
-                    sourcePlant = sp.GetString() ?? sourcePlant;
-                pointsJson = root.GetProperty("points");
-            }
-            else
-            {
-                // CSV: header expected: asset_code,label,ts,thickness,note,source_plant
-                var lines = await File.ReadAllLinesAsync(file);
-                if (lines.Length < 2) throw new InvalidOperationException("CSV has no data");
-                var header = lines[0].Split(',').Select(s => s.Trim()).ToArray();
-                int idxAsset = Array.FindIndex(header, h => string.Equals(h, "asset_code", StringComparison.OrdinalIgnoreCase));
-                int idxLabel = Array.FindIndex(header, h => string.Equals(h, "label", StringComparison.OrdinalIgnoreCase));
-                int idxTs = Array.FindIndex(header, h => string.Equals(h, "ts", StringComparison.OrdinalIgnoreCase));
-                int idxThk = Array.FindIndex(header, h => string.Equals(h, "thickness", StringComparison.OrdinalIgnoreCase));
-                int idxNote = Array.FindIndex(header, h => string.Equals(h, "note", StringComparison.OrdinalIgnoreCase));
-                int idxPlant = Array.FindIndex(header, h => string.Equals(h, "source_plant", StringComparison.OrdinalIgnoreCase));
-                if (idxAsset < 0 || idxLabel < 0 || idxTs < 0 || idxThk < 0)
-                    throw new InvalidOperationException("CSV header must include asset_code,label,ts,thickness");
-
-                var points = new List<Dictionary<string, object?>>();
-                assetCode = string.Empty;
-                foreach (var line in lines.Skip(1))
-                {
-                    if (string.IsNullOrWhiteSpace(line)) continue;
-                    var cols = SplitCsv(line);
-                    var ac = cols.ElementAtOrDefault(idxAsset) ?? string.Empty;
-                    var lbl = cols.ElementAtOrDefault(idxLabel) ?? string.Empty;
-                    var tsStr = cols.ElementAtOrDefault(idxTs) ?? string.Empty;
-                    var thkStr = cols.ElementAtOrDefault(idxThk) ?? string.Empty;
-                    var note = idxNote >= 0 ? cols.ElementAtOrDefault(idxNote) : null;
-                    var plant = idxPlant >= 0 ? cols.ElementAtOrDefault(idxPlant) : null;
-
-                    if (string.IsNullOrWhiteSpace(assetCode)) assetCode = ac;
-                    if (!string.IsNullOrWhiteSpace(plant)) sourcePlant = plant!;
-                    if (!DateTime.TryParse(tsStr, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var ts))
-                        throw new InvalidOperationException($"Invalid ts: {tsStr}");
-                    if (!decimal.TryParse(thkStr, NumberStyles.Number, CultureInfo.InvariantCulture, out var thk))
-                        throw new InvalidOperationException($"Invalid thickness: {thkStr}");
-
-                    points.Add(new Dictionary<string, object?>
-                    {
-                        ["label"] = lbl,
-                        ["ts"] = ts.ToString("o"),
-                        ["thickness"] = thk,
-                        ["note"] = string.IsNullOrWhiteSpace(note) ? null : note
-                    });
-                }
-                var json = JsonSerializer.Serialize(points);
-                using var doc = JsonDocument.Parse(json);
-                pointsJson = doc.RootElement.Clone();
-            }
+            var (assetCode, sourcePlant, pointsJson) = MeasurementBatchHelper.ParseFile(file);
 
             var kernel = CreateKernel(DatabaseProfile.PlantAnpz);
             var svc = new SpInsertMeasurementBatchService(kernel.Storage);
-            var rows = await svc.sp_insert_measurement_batchAsync(assetCode, pointsJson.GetRawText(), sourcePlant, CancellationToken.None);
-            var snippet = pointsJson.ValueKind == JsonValueKind.Array && pointsJson.GetArrayLength() > 0
-                ? pointsJson[0].ToString()
-                : "[]";
-            Console.WriteLine($"ок: строк={rows} json={Truncate(snippet, 200)}");
+            var rows = await svc.sp_insert_measurement_batchAsync(assetCode, pointsJson, sourcePlant, CancellationToken.None);
+            Console.WriteLine($"ок: строк={rows} json={Truncate(pointsJson, 200)}");
             return true;
         }
         catch (Exception ex)
@@ -460,29 +432,6 @@ namespace OilErp.Tests.Runner;
     }
 
     private static string Truncate(string s, int n) => s.Length <= n ? s : s.Substring(0, n) + "...";
-
-    private static string[] SplitCsv(string line)
-    {
-        var res = new List<string>();
-        var sb = new StringBuilder();
-        bool inQuotes = false;
-        for (int i = 0; i < line.Length; i++)
-        {
-            var ch = line[i];
-            if (ch == '"')
-            {
-                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"') { sb.Append('"'); i++; }
-                else inQuotes = !inQuotes;
-            }
-            else if (ch == ',' && !inQuotes)
-            {
-                res.Add(sb.ToString()); sb.Clear();
-            }
-            else sb.Append(ch);
-        }
-        res.Add(sb.ToString());
-        return res.ToArray();
-    }
 
     private static async Task<bool> CmdSummaryAsync(string[] args)
     {
@@ -564,7 +513,10 @@ namespace OilErp.Tests.Runner;
             // Render table
             if (rows.Count > 0)
             {
-                PrintTable(rows, new[] { "asset_code", "cr", "updated_at" });
+                foreach (var row in rows)
+                {
+                    Console.WriteLine($"{row.AssetCode,-12} cr={row.Cr} updated={row.UpdatedAt}");
+                }
             }
             return true;
         }
@@ -599,7 +551,10 @@ namespace OilErp.Tests.Runner;
             Console.WriteLine($"ок: строк={rows.Count}");
             if (rows.Count > 0)
             {
-                PrintTable(rows, new[] { "asset_code", "cr", "level", "threshold_low", "threshold_med", "threshold_high" });
+                foreach (var row in rows)
+                {
+                    Console.WriteLine($"{row.AssetCode,-12} cr={row.Cr} level={row.Level} thresholds={row.ThresholdLow}/{row.ThresholdMed}/{row.ThresholdHigh}");
+                }
             }
             return true;
         }
@@ -725,8 +680,10 @@ namespace OilErp.Tests.Runner;
             Console.WriteLine($"ок: строк={rows.Count}");
             if (rows.Count > 0)
             {
-                var first = JsonSerializer.Serialize(rows[0]);
-                Console.WriteLine($"json={Truncate(first, 240)}");
+                foreach (var row in rows.Take(5))
+                {
+                    Console.WriteLine($"id={row.Id} type={row.EventType} plant={row.SourcePlant} created={row.CreatedAt} payload={Truncate(row.PayloadJson, 200)}");
+                }
             }
             await CommitTxAsync(tx);
             return true;
@@ -776,8 +733,8 @@ namespace OilErp.Tests.Runner;
             var rows = await peek.fn_events_peekAsync(int.MaxValue, CancellationToken.None);
             var cutoff = DateTime.UtcNow - TimeSpan.FromSeconds(ageSec);
             var ids = rows
-                .Where(r => r.TryGetValue("created_at", out var v) && v is DateTime dt && dt <= cutoff)
-                .Select(r => Convert.ToInt64(r["id"]))
+                .Where(r => r.CreatedAt <= cutoff)
+                .Select(r => r.Id)
                 .ToArray();
 
             var svc = new FnEventsRequeueService(kernel.Storage);
@@ -827,9 +784,8 @@ internal static class TestEnvironment
         lock (SyncRoot)
         {
             if (CachedConfigs.TryGetValue(profile, out var cached)) return cached;
-            var resolved = ResolveFromEnvironment(profile)
-                           ?? ResolveFromAppSettings()
-                           ?? new StorageConfig("Host=localhost;Username=postgres;Password=postgres;Database=postgres", 30);
+            var resolved = ResolveFromAppSettings(profile)
+                           ?? StorageConfigProvider.GetConfig(profile);
             CachedConfigs[profile] = resolved;
             return resolved;
         }
@@ -845,22 +801,7 @@ internal static class TestEnvironment
 
     public static string ConnectionString => LoadStorageConfig().ConnectionString;
 
-    private static StorageConfig? ResolveFromEnvironment(DatabaseProfile profile)
-    {
-        string[] keys =
-        {
-            $"OILERP__DB__CONN_{profile.ToString().ToUpperInvariant()}",
-            "OILERP__DB__CONN",
-            "OIL_ERP_PG"
-        };
-        var conn = keys.Select(Environment.GetEnvironmentVariable).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
-        if (string.IsNullOrWhiteSpace(conn)) return null;
-        var timeoutStr = Environment.GetEnvironmentVariable("OILERP__DB__TIMEOUT_SEC");
-        var timeout = int.TryParse(timeoutStr, out var ti) ? ti : 30;
-        return new StorageConfig(conn!, timeout);
-    }
-
-    private static StorageConfig? ResolveFromAppSettings()
+    private static StorageConfig? ResolveFromAppSettings(DatabaseProfile profile)
     {
         foreach (var name in new[] { "appsettings.Development.json", "appsettings.json" })
         {
@@ -873,7 +814,14 @@ internal static class TestEnvironment
                 if (doc.RootElement.TryGetProperty("OILERP", out var oilerp)
                     && oilerp.TryGetProperty("DB", out var db))
                 {
-                    var conn = db.TryGetProperty("CONN", out var cEl) ? cEl.GetString() : null;
+                    var suffix = profile switch
+                    {
+                        DatabaseProfile.PlantAnpz => "_ANPZ",
+                        DatabaseProfile.PlantKrnpz => "_KRNPZ",
+                        _ => string.Empty
+                    };
+                    var connProp = string.IsNullOrWhiteSpace(suffix) ? "CONN" : $"CONN{suffix}";
+                    var conn = db.TryGetProperty(connProp, out var cEl) ? cEl.GetString() : null;
                     var timeout = db.TryGetProperty("TIMEOUT_SEC", out var tEl) ? tEl.GetInt32() : 30;
                     if (!string.IsNullOrWhiteSpace(conn))
                         return new StorageConfig(conn!, timeout);

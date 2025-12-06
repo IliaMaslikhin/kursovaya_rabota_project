@@ -4,9 +4,9 @@ using System.IO;
 namespace OilErp.Bootstrap;
 
 /// <summary>
-/// Minimal logger for infrastructure (console + файл в %APPDATA%/OilErp/logs).
+/// Общий минимальный логгер (консоль + файл в %APPDATA%/OilErp/logs).
 /// </summary>
-internal static class AppLogger
+public static class AppLogger
 {
     private static readonly object Sync = new();
     private static readonly string LogDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OilErp", "logs");
@@ -32,7 +32,7 @@ internal static class AppLogger
         }
         catch
         {
-            // ignore logging errors
+            // Логгер не должен ронять приложение.
         }
     }
 

@@ -1,80 +1,31 @@
-# Database Design
+# Дизайн базы данных
 
-## Schema Overview
+## Центральная БД (public)
+- **assets_global**: `asset_code` (UNIQUE), `name`, `type`, `plant_code`, `created_at`.
+- **risk_policies**: `name` (UNIQUE), пороги `threshold_low/med/high`.
+- **analytics_cr**: расчёт CR и последние/предыдущие замеры, FK на `assets_global.asset_code`.
+- **events_inbox**: очередь событий (`event_type`, `source_plant`, `payload_json`, `created_at`, `processed_at`).
 
-The system uses PostgreSQL with a distributed database architecture.
+## Основные функции/процедуры (central)
+- `fn_calc_cr` — CR по двум замерам.
+- `fn/sp_asset_upsert`, `fn/sp_policy_upsert` — upsert справочников (функции делегируют в процедуры, OUT id).
+- Очередь: `fn_events_enqueue`, `fn_events_peek`, `fn_events_requeue`, `fn_events_cleanup`.
+- Инжест: `fn_ingest_events` → `sp_ingest_events(p_limit, OUT processed)`: берёт только `HC_MEASUREMENT_BATCH` с валидным `asset_code/last_thk/last_date`, проверяет порядок дат/толщин, обновляет `analytics_cr`, ставит `processed_at`, шлёт `NOTIFY events_ingest`.
+- Аналитика: `fn_eval_risk`, `fn_asset_summary_json`, `fn_top_assets_by_cr`, `fn_plant_cr_stats`.
 
-## Central Database Schemas
+## Заводские БД (ANPZ/KRNPZ, public)
+- **assets_local**, **measurement_points**, **measurements** (CHECK thickness > 0), **local_events**.
+- FDW: `central_srv` + `central_ft.events_inbox` для записи в центральную очередь.
+- Триггер: `trg_measurements_ai` → пишет в `local_events` при вставке замера.
+- Измерения: `sp_insert_measurement_batch` (FUNCTION) валидирует/нормализует точки, вызывает `sp_insert_measurement_batch_prc`.  
+  `sp_insert_measurement_batch_prc` (PROCEDURE, OUT p_inserted) вставляет актив/точки/замеры и публикует событие `HC_MEASUREMENT_BATCH` в FDW inbox.
 
-### Catalogs Schema
-- `materials`: Material specifications and properties
-- `coatings`: Coating types and characteristics  
-- `fluids`: Process fluid definitions
-- `corrosion_mechanisms`: Types of corrosion processes
+## Порядок применения скриптов
+- central: `01_tables.sql` → `02_functions_core.sql` → `03_procedures.sql` (legacy 04 не используется).  
+- anpz/krnpz: `01_tables.sql` → `02_fdw.sql` → `03_trigger_measurements_ai.sql` → `04_function_sp_insert_measurement_batch.sql` → `05_procedure_wrapper.sql`.
+- Нагрузочный генератор: `central/99_mass_test_events.sql` (ручной запуск).
 
-### Assets Schema
-- `global_assets`: Master asset registry
-- `asset_hierarchy`: Asset parent-child relationships
-
-### Risk Schema
-- `policies`: Risk assessment policies
-- `matrix`: Risk level calculation rules
-- `thresholds`: Critical value definitions
-
-### Analytics Schema
-- `corrosion_rates`: Historical corrosion calculations
-- `remaining_life`: Asset life predictions
-- `trends`: Statistical trend analysis
-
-### Incidents Schema
-- `incidents_global`: Company-wide incident tracking
-- `incident_assets`: Asset involvement in incidents
-
-### Sync Schema
-- `outbox`: Events to be synchronized
-- `inbox`: Received events from plants
-
-## Plant Database Schemas
-
-### Local_Assets Schema
-- `assets`: Plant-specific asset instances
-- `segments`: Asset segment definitions
-- `measurement_points`: Data collection points
-
-### Measurements Schema
-- `readings`: Sensor and manual measurements
-- `calibrations`: Equipment calibration records
-
-### Maintenance Schema
-- `defects`: Identified asset defects
-- `work_orders`: Maintenance work tracking
-- `inspections`: Scheduled inspection records
-
-### Events Schema
-- `local_events`: Plant-generated events for sync
-
-## Foreign Data Wrappers
-
-Plant databases access central catalogs via PostgreSQL FDW:
-
-```sql
-CREATE SERVER central_server
-  FOREIGN DATA WRAPPER postgres_fdw
-  OPTIONS (host 'central-host', dbname 'central', port '5432');
-
-IMPORT FOREIGN SCHEMA catalogs
-  FROM SERVER central_server
-  INTO public;
-```
-
-## Data Types
-
-### Value Objects
-- `AssetId`: Strongly-typed asset identifier
-- `PlantCode`: Enumerated plant codes (ANPZ, KRNPZ, SNPZ)
-- `MeasurementValue`: Measurement with unit and precision
-
-### Enumerations
-- `RiskLevel`: GREEN, YELLOW, ORANGE, RED
-- `DefectSeverity`: LOW, MEDIUM, HIGH, CRITICAL
-- `WorkOrderStatus`: OPEN, IN_PROGRESS, COMPLETED, CANCELLED
+## Особенности
+- Все операции описаны в `src/OilErp.Core/Operations/OperationNames.cs` и `src/OilErp.Infrastructure/Readme.Mapping.md`; при добавлении SQL обновлять карту и инвентаризацию.
+- Инвентаризация при старте (UI/Tests) проверяет наличие объектов и сигнатуры (pg_proc) для каждого профиля.
+- Event type для заводских событий: `HC_MEASUREMENT_BATCH` (должен совпадать с фильтром central ingest).

@@ -21,4 +21,23 @@ public abstract class AppServiceBase
     {
         Storage = storage ?? throw new ArgumentNullException(nameof(storage));
     }
+
+    protected static string? NormalizeOptional(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
+
+    protected static string NormalizeCode(string value)
+    {
+        var normalized = NormalizeOptional(value);
+        if (normalized is null) throw new ArgumentNullException(nameof(value));
+        return normalized;
+    }
+
+    protected static string? NormalizePlant(string? value)
+    {
+        var normalized = NormalizeOptional(value);
+        return normalized?.ToUpperInvariant();
+    }
 }

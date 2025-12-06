@@ -1,55 +1,40 @@
-# Запуск
+# Запуск и проверка
 
-## Конфигурация подключения к БД
-CLI и тестовые сценарии читают настройки из переменных окружения или из `appsettings.Development.json`.
-
-Переменные окружения (предпочтительно):
-
+## Конфигурация подключения
+Предпочтительно через переменные окружения (единый провайдер `StorageConfigProvider`):
 ```bash
 export OILERP__DB__CONN="Host=localhost;Username=postgres;Password=postgres;Database=central"
+export OILERP__DB__CONN_ANPZ="Host=localhost;Username=postgres;Password=postgres;Database=anpz"
+export OILERP__DB__CONN_KRNPZ="Host=localhost;Username=postgres;Password=postgres;Database=krnpz"
 export OILERP__DB__TIMEOUT_SEC=30
 ```
+UI читает `OIL_ERP_PG`/`OIL_ERP_PG_TIMEOUT`, но при ProjectReference на Infrastructure можно использовать ту же переменную `OILERP__DB__CONN`.
 
-Альтернатива через файл `appsettings.Development.json` (рядом с `src/OilErp.Tests.Runner`):
+Альтернатива для CLI/Tests — `appsettings.Development.json` рядом с `src/OilErp.Tests.Runner` (ключи `OILERP:DB:CONN[_ANPZ|_KRNPZ]`).
 
-```json
-{
-  "OILERP": {
-    "DB": {
-      "CONN": "Host=localhost;Username=postgres;Password=postgres;Database=central",
-      "TIMEOUT_SEC": 30
-    }
-  }
-}
-```
+## Применение SQL
+1) central: `sql/central/01_tables.sql` → `02_functions_core.sql` → `03_procedures.sql`.  
+2) anpz/krnpz: `01_tables.sql` → `02_fdw.sql` → `03_trigger_measurements_ai.sql` → `04_function_sp_insert_measurement_batch.sql` → `05_procedure_wrapper.sql`.  
+3) (опционально) `sql/central/99_mass_test_events.sql` для нагрузочных вставок.
 
-## Первый запуск
+## Первый запуск/Bootstrap
+- При старте CLI/Tests/UI работает общий `DatabaseBootstrapper`: создает базы `central/anpz/krnpz` при необходимости, прогоняет инвентаризацию по профилю, пытается авто-применить скрипты, пишет лог в `%APPDATA%/OilErp/logs`, при ошибке кладёт гайд на рабочий стол. Маркер первого запуска хранится в `%APPDATA%/OilErp/first-run.machine`.
+- Инвентаризация сверяет наличие и сигнатуры функций/процедур/триггеров/таблиц.
 
-1. Примените SQL-скрипты из каталога `sql/` для центральной БД и заводов (см. `sql/README.md`).
-2. Установите переменные окружения как выше.
-3. Запустите команду добавления актива:
+## Запуск
+- **Сборка**: `dotnet build src/OilErp.sln -c Release`.
+- **Smoke/CLI**: `dotnet run --project src/OilErp.Tests.Runner` (меню) или команды:
+  - `add-asset --id A-001 --name "Pipe #1" --plant ANPZ`
+  - `add-measurements-anpz --file ./points.json|csv`
+  - `events-peek --limit 10`, `events-ingest --max 5000`, `events-requeue --age-sec 3600`, `events-cleanup --age-sec 86400`
+  - `summary --asset A-001 [--policy default]`, `top-by-cr --take 20`, `eval-risk --asset A-001`, `plant-cr --plant ANPZ --from 2024-01-01 --to 2025-01-01`
+  - `watch --channel events_ingest`
+- **UI**: `dotnet run --project src/OilErp.Ui` (Avalonia). Требует рабочее соединение: MeasurementDataProvider использует live-данные, снапшоты лишь дополняют пустую БД.
 
-```bash
-dotnet run --project src/OilErp.Tests.Runner -- add-asset --id A-001 --name "Pipe #1" --plant ANPZ
-```
+## Поведение ingest/аналитики
+- Заводы публикуют `HC_MEASUREMENT_BATCH` в central через FDW; central `fn/sp_ingest_events` принимает только этот тип, проверяет порядок дат/толщин и шлёт `NOTIFY events_ingest`.
+- Аналитика строится из `analytics_cr`: `fn_top_assets_by_cr`, `fn_asset_summary_json`, `fn_eval_risk`, `fn_plant_cr_stats`.
 
-Примеры других команд:
-
-```bash
-# Загрузка измерений из JSON/CSV
-dotnet run --project src/OilErp.Tests.Runner -- add-measurements-anpz --file ./points.json
-
-# Просмотр очереди событий
-dotnet run --project src/OilErp.Tests.Runner -- events-peek --limit 10
-
-# Аналитика по активу
-dotnet run --project src/OilErp.Tests.Runner -- summary --asset A-001
-```
-
-## Автопроверка БД и первый запуск
-
-- При старте CLI/смоук-харнесса и UI выполняется проверка профиля БД (central/anpz/krnpz) через `DatabaseBootstrapper`: при необходимости создаются сами базы `central/anpz/krnpz` на указанном хосте (тем же пользователем), затем недостающие объекты из `sql/` (idempotent). Оффлайн-режима нет: без соединения приложение завершается.
-- Если проверка/создание не удалась, на рабочий стол сохраняется `OilErp_Database_Guide.md` с ошибкой и инструкцией (берётся из этого файла), в `%APPDATA%/OilErp/logs/app.log` пишутся детали.
-- Фиксируется «код машины» (хеш окружения) и маркер первого запуска в `%APPDATA%/OilErp/first-run.machine`; тесты, помеченные `FirstRunOnly`, пропускаются при последующих запусках.
-- UI берёт подключение из `OIL_ERP_PG` (или резервно `OILERP__DB__CONN`), показывает статус (профиль, код машины, путь до гайда). При ошибке подключения приложение не стартует (см. лог).
-- Форма добавления замеров пишет напрямую в процедуру завода (ANPZ/KRNPZ) через существующие Core-сервисы; без БД выполнение прерывается с ошибкой. JSON снапшоты используются только как доп. данные при наличии соединения.
+## Логи и диагностика
+- Логи: `%APPDATA%/OilErp/logs/app-*.log`.
+- LISTEN/NOTIFY: канал `events_ingest` (ingest), можно слушать через CLI `watch` или Diagnostics в UI.

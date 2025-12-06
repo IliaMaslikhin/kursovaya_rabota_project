@@ -18,6 +18,10 @@ public class FnEventsEnqueueService : AppServiceBase
         string p_payload,
         CancellationToken ct = default)
     {
+        p_event_type = NormalizeOptional(p_event_type) ?? throw new ArgumentNullException(nameof(p_event_type));
+        p_source_plant = NormalizePlant(p_source_plant) ?? "ANPZ";
+        p_payload = p_payload?.Trim() ?? "{}";
+
         var spec = new CommandSpec(
             OperationNames.Central.EventsEnqueue,
             new Dictionary<string, object?>
@@ -30,4 +34,3 @@ public class FnEventsEnqueueService : AppServiceBase
         return await Storage.ExecuteCommandAsync(spec, ct);
     }
 }
-

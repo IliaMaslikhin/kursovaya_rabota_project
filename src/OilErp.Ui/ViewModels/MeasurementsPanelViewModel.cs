@@ -44,7 +44,7 @@ public sealed partial class MeasurementsPanelViewModel : ObservableObject
             Series.Clear();
             AppLogger.Info("[ui] measurements load start");
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var result = await Task.Run(() => dataProvider.Load(), cts.Token);
+            var result = await dataProvider.LoadAsync(cts.Token);
             foreach (var s in result.Series)
             {
                 Series.Add(s);

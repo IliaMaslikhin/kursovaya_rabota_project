@@ -19,6 +19,11 @@ public class FnAssetUpsertService : AppServiceBase
         string? p_plant_code,
         CancellationToken ct = default)
     {
+        p_asset_code = NormalizeCode(p_asset_code);
+        p_name = NormalizeOptional(p_name);
+        p_type = NormalizeOptional(p_type);
+        p_plant_code = NormalizePlant(p_plant_code);
+
         var spec = new CommandSpec(
             OperationNames.Central.AssetUpsert,
             new Dictionary<string, object?>
@@ -32,4 +37,3 @@ public class FnAssetUpsertService : AppServiceBase
         return await Storage.ExecuteCommandAsync(spec, ct);
     }
 }
-

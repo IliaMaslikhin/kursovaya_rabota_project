@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Text.Json;
 using System.Diagnostics;
@@ -26,23 +27,14 @@ public class StorageAdapter : DbClientBase
     private CancellationTokenSource? _listenCts;
     private Task? _listenTask;
 
-    public StorageAdapter() : this(BuildConfigFromEnv()) { }
+    public StorageAdapter() : this(StorageConfigProvider.GetConfig()) { }
 
     public StorageAdapter(StorageConfig config)
     {
         _config = config;
     }
 
-    private static StorageConfig BuildConfigFromEnv()
-    {
-        var cs = Environment.GetEnvironmentVariable("OILERP__DB__CONN")
-                 ?? Environment.GetEnvironmentVariable("OIL_ERP_PG")
-                 ?? "Host=localhost;Username=postgres;Password=postgres;Database=postgres";
-        var timeoutVar = Environment.GetEnvironmentVariable("OILERP__DB__TIMEOUT_SEC")
-                         ?? Environment.GetEnvironmentVariable("OIL_ERP_PG_TIMEOUT");
-        var timeout = int.TryParse(timeoutVar, out var t) ? t : 30;
-        return new StorageConfig(cs, timeout);
-    }
+    private static readonly ConcurrentDictionary<(string Schema, string Name), RoutineMetadata> RoutineCache = new();
 
     /// <inheritdoc />
     public override async Task<IReadOnlyList<T>> ExecuteQueryAsync<T>(QuerySpec spec, CancellationToken ct = default)
@@ -160,6 +152,7 @@ public class StorageAdapter : DbClientBase
         }
         catch (PostgresException pg)
         {
+            InvalidateRoutine(schema, name);
             // Пробрасываем SQLSTATE в тексте исключения
             throw new InvalidOperationException($"PG error {pg.SqlState}: {pg.MessageText}", pg);
         }
@@ -250,7 +243,13 @@ public class StorageAdapter : DbClientBase
             catch (OperationCanceledException) { }
             catch
             {
-                // swallow background errors; notifications are best-effort
+                AppLogger.Error("[БД] слушатель LISTEN упал; перезапустите подписку при необходимости");
+            }
+            finally
+            {
+                try { await _listenConn.CloseAsync(); } catch { }
+                await _listenConn.DisposeAsync();
+                _listenConn = null;
             }
         }, linked.Token);
     }
@@ -367,6 +366,9 @@ public class StorageAdapter : DbClientBase
 
     private static async Task<RoutineMetadata> GetRoutineMetadataAsync(string schema, string name, NpgsqlConnection conn, CancellationToken ct)
     {
+        var key = (Schema: schema, Name: name);
+        if (RoutineCache.TryGetValue(key, out var cached)) return cached;
+
         const string sql = @"select p.prokind, p.proretset, rt.typname as rettype, p.pronargs, p.proargnames
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
@@ -397,7 +399,14 @@ order by p.oid desc limit 1";
                             && argNames.Length >= pronargs
                             && argNames.Take(pronargs).All(static n => !string.IsNullOrWhiteSpace(n));
 
-        return new RoutineMetadata(schema, name, prokind == 'p', proretset, rettype, supportsNamed);
+        var meta = new RoutineMetadata(schema, name, prokind == 'p', proretset, rettype, supportsNamed);
+        RoutineCache[key] = meta;
+        return meta;
+    }
+
+    private static void InvalidateRoutine(string schema, string name)
+    {
+        RoutineCache.TryRemove((schema, name), out _);
     }
 
     private readonly record struct RoutineMetadata(string Schema, string Name, bool IsProcedure, bool ReturnsSet, string ReturnType, bool SupportsNamedArguments)

@@ -22,17 +22,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE v_id bigint;
 BEGIN
-  INSERT INTO public.assets_global(asset_code, name, type, plant_code)
-  VALUES (p_asset_code, COALESCE(p_name, p_asset_code), p_type, p_plant_code)
-  ON CONFLICT (asset_code) DO UPDATE
-    SET name       = COALESCE(EXCLUDED.name,       public.assets_global.name),
-        type       = COALESCE(EXCLUDED.type,       public.assets_global.type),
-        plant_code = COALESCE(EXCLUDED.plant_code, public.assets_global.plant_code)
-  RETURNING id INTO v_id;
-
-  IF v_id IS NULL THEN
-    SELECT id INTO v_id FROM public.assets_global WHERE asset_code = p_asset_code;
-  END IF;
+  CALL public.sp_asset_upsert(p_asset_code, p_name, p_type, p_plant_code, v_id);
   RETURN v_id;
 END$$;
 
@@ -47,17 +37,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE v_id bigint;
 BEGIN
-  INSERT INTO public.risk_policies(name, threshold_low, threshold_med, threshold_high)
-  VALUES (p_name, p_low, p_med, p_high)
-  ON CONFLICT (name) DO UPDATE
-    SET threshold_low  = EXCLUDED.threshold_low,
-        threshold_med  = EXCLUDED.threshold_med,
-        threshold_high = EXCLUDED.threshold_high
-  RETURNING id INTO v_id;
-
-  IF v_id IS NULL THEN
-    SELECT id INTO v_id FROM public.risk_policies WHERE name = p_name;
-  END IF;
+  CALL public.sp_policy_upsert(p_name, p_low, p_med, p_high, v_id);
   RETURN v_id;
 END$$;
 
@@ -71,9 +51,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE v_id bigint;
 BEGIN
-  INSERT INTO public.events_inbox(event_type, source_plant, payload_json)
-  VALUES (p_event_type, p_source_plant, COALESCE(p_payload, '{}'::jsonb))
-  RETURNING id INTO v_id;
+  CALL public.sp_events_enqueue(p_event_type, p_source_plant, p_payload, v_id);
   RETURN v_id;
 END$$;
 
@@ -96,62 +74,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE processed int := 0;
 BEGIN
-  WITH cte AS (
-    SELECT id, source_plant, payload_json
-    FROM public.events_inbox
-    WHERE processed_at IS NULL
-    ORDER BY id
-    LIMIT GREATEST(1, p_limit)
-    FOR UPDATE SKIP LOCKED
-  ),
-  parsed AS (
-    SELECT
-      c.id,
-      c.source_plant,
-      NULLIF(trim(c.payload_json->>'asset_code'), '') AS asset_code,
-      CASE WHEN jsonb_typeof(c.payload_json->'prev_thk') IN ('number','string')
-           THEN NULLIF(c.payload_json->>'prev_thk','')::numeric END AS prev_thk,
-      CASE WHEN NULLIF(c.payload_json->>'prev_date','') IS NOT NULL
-           THEN (c.payload_json->>'prev_date')::timestamptz END AS prev_date,
-      CASE WHEN jsonb_typeof(c.payload_json->'last_thk') IN ('number','string')
-           THEN NULLIF(c.payload_json->>'last_thk','')::numeric END AS last_thk,
-      CASE WHEN NULLIF(c.payload_json->>'last_date','') IS NOT NULL
-           THEN (c.payload_json->>'last_date')::timestamptz END AS last_date
-    FROM cte c
-  ),
-  upsert_assets AS (
-    INSERT INTO public.assets_global(asset_code, name, type, plant_code)
-    SELECT DISTINCT asset_code, asset_code, NULL, source_plant
-    FROM parsed
-    WHERE asset_code IS NOT NULL
-    ON CONFLICT (asset_code) DO NOTHING
-    RETURNING 1
-  ),
-  upsert_cr AS (
-    INSERT INTO public.analytics_cr(asset_code, prev_thk, prev_date, last_thk, last_date, cr, updated_at)
-    SELECT
-      p.asset_code,
-      p.prev_thk, p.prev_date,
-      p.last_thk, p.last_date,
-      public.fn_calc_cr(p.prev_thk, p.prev_date, p.last_thk, p.last_date),
-      now()
-    FROM parsed p
-    WHERE p.asset_code IS NOT NULL
-    ON CONFLICT (asset_code) DO UPDATE
-      SET prev_thk   = EXCLUDED.prev_thk,
-          prev_date  = EXCLUDED.prev_date,
-          last_thk   = EXCLUDED.last_thk,
-          last_date  = EXCLUDED.last_date,
-          cr         = EXCLUDED.cr,
-          updated_at = now()
-    RETURNING 1
-  )
-  UPDATE public.events_inbox e
-  SET processed_at = now()
-  FROM cte
-  WHERE e.id = cte.id;
-
-  GET DIAGNOSTICS processed = ROW_COUNT;
+  CALL public.sp_ingest_events(p_limit, processed);
   RETURN processed;
 END$$;
 
@@ -162,8 +85,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE n int;
 BEGIN
-  UPDATE public.events_inbox SET processed_at = NULL WHERE id = ANY(p_ids);
-  GET DIAGNOSTICS n = ROW_COUNT;
+  CALL public.sp_events_requeue(p_ids, n);
   RETURN n;
 END$$;
 
@@ -174,10 +96,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE n int;
 BEGIN
-  DELETE FROM public.events_inbox
-  WHERE processed_at IS NOT NULL
-    AND processed_at < now() - p_older_than;
-  GET DIAGNOSTICS n = ROW_COUNT;
+  CALL public.sp_events_cleanup(p_older_than, n);
   RETURN n;
 END$$;
 

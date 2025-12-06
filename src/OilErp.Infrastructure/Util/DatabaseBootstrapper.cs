@@ -23,9 +23,9 @@ public sealed record BootstrapResult(
 }
 
 /// <summary>
-/// Обеспечивает проверку/создание БД для UI.
+/// Общий бутстраппер для UI/Tests/Infra.
 /// </summary>
-internal sealed class DatabaseBootstrapper
+public sealed class DatabaseBootstrapper
 {
     private readonly string connectionString;
     private readonly string? guideSourcePath;

@@ -12,7 +12,7 @@ public class FnEventsPeekService : AppServiceBase
 {
     public FnEventsPeekService(IStoragePort storage) : base(storage) { }
 
-    public async Task<IReadOnlyList<Dictionary<string, object?>>> fn_events_peekAsync(
+    public async Task<IReadOnlyList<EventPeekItemDto>> fn_events_peekAsync(
         int p_limit,
         CancellationToken ct = default)
     {
@@ -23,7 +23,17 @@ public class FnEventsPeekService : AppServiceBase
                 ["p_limit"] = p_limit,
             }
         );
-        return await Storage.ExecuteQueryAsync<Dictionary<string, object?>>(spec, ct);
+        var rows = await Storage.ExecuteQueryAsync<Dictionary<string, object?>>(spec, ct);
+        return rows.Select(Map).ToList();
+    }
+
+    private static EventPeekItemDto Map(Dictionary<string, object?> row)
+    {
+        return new EventPeekItemDto(
+            Id: Convert.ToInt64(row["id"]),
+            EventType: row.TryGetValue("event_type", out var t) ? t?.ToString() : null,
+            SourcePlant: row.TryGetValue("source_plant", out var sp) ? sp?.ToString() : null,
+            PayloadJson: row.TryGetValue("payload_json", out var p) ? p?.ToString() ?? "{}" : "{}",
+            CreatedAt: row.TryGetValue("created_at", out var c) && DateTime.TryParse(c?.ToString(), out var dt) ? dt : DateTime.MinValue);
     }
 }
-

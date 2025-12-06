@@ -75,11 +75,9 @@ public sealed partial class AnalyticsPanelViewModel : ObservableObject
 
             foreach (var row in rows)
             {
-                var asset = Read(row, "asset_code") ?? "UNKNOWN";
-                var cr = ReadDecimal(row, "cr");
-                var updated = Read(row, "updated_at");
-                DateTime? updatedAt = null;
-                if (DateTime.TryParse(updated, out var parsed)) updatedAt = parsed;
+                var asset = row.AssetCode ?? "UNKNOWN";
+                var cr = row.Cr;
+                var updatedAt = row.UpdatedAt;
 
                 string? risk = null;
                 string plant = "CENTRAL";
@@ -123,11 +121,6 @@ public sealed partial class AnalyticsPanelViewModel : ObservableObject
         return kvp.Value?.ToString();
     }
 
-    private static decimal? ReadDecimal(IReadOnlyDictionary<string, object?> row, string name)
-    {
-        var str = Read(row, name);
-        return decimal.TryParse(str, out var parsed) ? parsed : null;
-    }
 }
 
 public sealed record AnalyticsRowViewModel(string AssetCode, string Plant, string CrDisplay, string Risk, string UpdatedAt);
