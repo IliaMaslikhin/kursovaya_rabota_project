@@ -11,7 +11,8 @@ public static class StorageConfigProvider
     {
         var conn = ResolveConnection(profile) ?? "Host=localhost;Username=postgres;Password=postgres;Database=postgres";
         var timeout = ResolveTimeout();
-        return new StorageConfig(conn, timeout);
+        var disableRoutineCache = ResolveDisableRoutineCache();
+        return new StorageConfig(conn, timeout, disableRoutineCache);
     }
 
     private static string? ResolveConnection(DatabaseProfile profile)
@@ -44,5 +45,17 @@ public static class StorageConfigProvider
         var timeoutVar = Environment.GetEnvironmentVariable("OILERP__DB__TIMEOUT_SEC")
                          ?? Environment.GetEnvironmentVariable("OIL_ERP_PG_TIMEOUT");
         return int.TryParse(timeoutVar, out var t) ? t : 30;
+    }
+
+    private static bool ResolveDisableRoutineCache()
+    {
+        var flag = Environment.GetEnvironmentVariable("OILERP__DB__DISABLE_PROC_CACHE");
+        if (string.IsNullOrWhiteSpace(flag)) return false;
+        return flag.Trim().ToLowerInvariant() switch
+        {
+            "1" or "true" or "yes" or "on" => true,
+            "0" or "false" or "no" or "off" => false,
+            _ => false
+        };
     }
 }

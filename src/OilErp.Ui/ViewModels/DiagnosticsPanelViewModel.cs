@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -19,15 +20,25 @@ public sealed partial class DiagnosticsPanelViewModel : ObservableObject
     {
         this.factory = factory;
         Entries = new ObservableCollection<DiagnosticEntryViewModel>();
-        channel = "events_ingest";
+        AvailableChannels = new ObservableCollection<string>(new[]
+        {
+            "events_ingest",
+            "events_enqueue",
+            "events_requeue",
+            "events_cleanup"
+        });
+        channel = AvailableChannels.First();
+        autoReconnect = true;
         statusMessage = "Укажите канал LISTEN и нажмите «Старт».";
     }
 
     public ObservableCollection<DiagnosticEntryViewModel> Entries { get; }
+    public ObservableCollection<string> AvailableChannels { get; }
 
     [ObservableProperty] private string channel;
     [ObservableProperty] private bool isListening;
     [ObservableProperty] private string statusMessage;
+    [ObservableProperty] private bool autoReconnect;
 
     [RelayCommand]
     public async Task StartAsync()
@@ -97,5 +108,9 @@ public sealed partial class DiagnosticsPanelViewModel : ObservableObject
         {
             Entries.RemoveAt(Entries.Count - 1);
         }
+
+        if (!AutoReconnect || IsListening) return;
+        // Если слушатель упал и перестал быть отмечен, попробуем авто-старт
+        _ = StartAsync();
     }
 }

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Diagnostics;
 using System.Text;
+using System.Threading;
 using OilErp.Core.Abstractions;
 using OilErp.Core.Contracts;
 using OilErp.Core.Dto;
@@ -19,6 +20,7 @@ namespace OilErp.Infrastructure.Adapters;
 public class StorageAdapter : DbClientBase
 {
     private readonly StorageConfig _config;
+    private readonly bool _disableRoutineCache;
 
     private static readonly AsyncLocal<PgTransactionScope?> _currentTx = new();
 
@@ -26,12 +28,18 @@ public class StorageAdapter : DbClientBase
     private readonly HashSet<string> _listenChannels = new(StringComparer.Ordinal);
     private CancellationTokenSource? _listenCts;
     private Task? _listenTask;
+    private readonly SemaphoreSlim _listenLock = new(1, 1);
 
     public StorageAdapter() : this(StorageConfigProvider.GetConfig()) { }
 
     public StorageAdapter(StorageConfig config)
     {
         _config = config;
+        _disableRoutineCache = config.DisableRoutineMetadataCache;
+        if (_disableRoutineCache)
+        {
+            AppLogger.Info("[БД] pg_proc routine cache disabled by config");
+        }
     }
 
     private static readonly ConcurrentDictionary<(string Schema, string Name), RoutineMetadata> RoutineCache = new();
@@ -197,11 +205,19 @@ public class StorageAdapter : DbClientBase
     {
         if (string.IsNullOrWhiteSpace(channel)) throw new ArgumentNullException(nameof(channel));
         await EnsureListenerAsync(ct);
-        if (_listenConn == null) throw new InvalidOperationException("Listener not initialized");
-        await using var cmd = _listenConn.CreateCommand();
-        cmd.CommandText = $"LISTEN \"{channel}\"";
-        await cmd.ExecuteNonQueryAsync(ct);
-        _listenChannels.Add(channel);
+        await _listenLock.WaitAsync(ct);
+        try
+        {
+            if (_listenConn == null) throw new InvalidOperationException("Listener not initialized");
+            await using var cmd = _listenConn.CreateCommand();
+            cmd.CommandText = $"LISTEN \"{channel}\"";
+            await cmd.ExecuteNonQueryAsync(ct);
+            _listenChannels.Add(channel);
+        }
+        finally
+        {
+            _listenLock.Release();
+        }
     }
 
     /// <summary>
@@ -210,10 +226,18 @@ public class StorageAdapter : DbClientBase
     private async Task UnsubscribeInternalAsync(string channel, CancellationToken ct = default)
     {
         if (_listenConn == null) return;
-        await using var cmd = _listenConn.CreateCommand();
-        cmd.CommandText = $"UNLISTEN \"{channel}\"";
-        await cmd.ExecuteNonQueryAsync(ct);
-        _listenChannels.Remove(channel);
+        await _listenLock.WaitAsync(ct);
+        try
+        {
+            await using var cmd = _listenConn.CreateCommand();
+            cmd.CommandText = $"UNLISTEN \"{channel}\"";
+            await cmd.ExecuteNonQueryAsync(ct);
+            _listenChannels.Remove(channel);
+        }
+        finally
+        {
+            _listenLock.Release();
+        }
     }
 
     private void ClearCurrentTx()
@@ -223,35 +247,86 @@ public class StorageAdapter : DbClientBase
 
     private async Task EnsureListenerAsync(CancellationToken ct)
     {
-        if (_listenConn != null && _listenConn.FullState == System.Data.ConnectionState.Open) return;
-        _listenConn = new NpgsqlConnection(_config.ConnectionString);
-        _listenConn.Notification += (_, e) => Notified?.Invoke(this, new DbNotification(e.Channel, e.Payload, e.PID));
-        await _listenConn.OpenAsync(ct);
+        if (_listenTask != null && !_listenTask.IsCompleted) return;
 
         _listenCts?.Cancel();
-        _listenCts = new CancellationTokenSource();
-        var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _listenCts.Token);
-        _listenTask = Task.Run(async () =>
+        _listenCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var token = _listenCts.Token;
+        _listenTask = Task.Run(() => ListenLoopAsync(token), token);
+        await Task.CompletedTask;
+    }
+
+    private async Task ListenLoopAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
         {
             try
             {
-                while (!linked.IsCancellationRequested)
+                await StartListenerConnectionAsync(token);
+                while (!token.IsCancellationRequested && _listenConn != null)
                 {
-                    await _listenConn.WaitAsync(linked.Token);
+                    await _listenConn.WaitAsync(token);
                 }
             }
-            catch (OperationCanceledException) { }
-            catch
+            catch (OperationCanceledException)
             {
-                AppLogger.Error("[БД] слушатель LISTEN упал; перезапустите подписку при необходимости");
+                break;
             }
-            finally
+            catch (Exception ex)
+            {
+                AppLogger.Error($"[БД] слушатель LISTEN упал: {ex.Message}. Перезапуск...");
+                await Task.Delay(500, token);
+            }
+        }
+
+        await DisposeListenerAsync();
+    }
+
+    private async Task StartListenerConnectionAsync(CancellationToken token)
+    {
+        await _listenLock.WaitAsync(token);
+        try
+        {
+            if (_listenConn != null)
             {
                 try { await _listenConn.CloseAsync(); } catch { }
                 await _listenConn.DisposeAsync();
                 _listenConn = null;
             }
-        }, linked.Token);
+            _listenConn = new NpgsqlConnection(_config.ConnectionString);
+            _listenConn.Notification += (_, e) => Notified?.Invoke(this, new DbNotification(e.Channel, e.Payload, e.PID));
+            await _listenConn.OpenAsync(token);
+
+            // восстановить каналы
+            foreach (var ch in _listenChannels.ToArray())
+            {
+                await using var cmd = _listenConn.CreateCommand();
+                cmd.CommandText = $"LISTEN \"{ch}\"";
+                await cmd.ExecuteNonQueryAsync(token);
+            }
+        }
+        finally
+        {
+            _listenLock.Release();
+        }
+    }
+
+    private async Task DisposeListenerAsync()
+    {
+        await _listenLock.WaitAsync();
+        try
+        {
+            if (_listenConn != null)
+            {
+                try { await _listenConn.CloseAsync(); } catch { }
+                await _listenConn.DisposeAsync();
+            }
+            _listenConn = null;
+        }
+        finally
+        {
+            _listenLock.Release();
+        }
     }
 
     private int ResolveTimeout(int? specTimeout) => specTimeout ?? _config.CommandTimeoutSeconds;
@@ -364,10 +439,10 @@ public class StorageAdapter : DbClientBase
         }
     }
 
-    private static async Task<RoutineMetadata> GetRoutineMetadataAsync(string schema, string name, NpgsqlConnection conn, CancellationToken ct)
+    private async Task<RoutineMetadata> GetRoutineMetadataAsync(string schema, string name, NpgsqlConnection conn, CancellationToken ct)
     {
         var key = (Schema: schema, Name: name);
-        if (RoutineCache.TryGetValue(key, out var cached)) return cached;
+        if (!_disableRoutineCache && RoutineCache.TryGetValue(key, out var cached)) return cached;
 
         const string sql = @"select p.prokind, p.proretset, rt.typname as rettype, p.pronargs, p.proargnames
 from pg_proc p
@@ -400,7 +475,10 @@ order by p.oid desc limit 1";
                             && argNames.Take(pronargs).All(static n => !string.IsNullOrWhiteSpace(n));
 
         var meta = new RoutineMetadata(schema, name, prokind == 'p', proretset, rettype, supportsNamed);
-        RoutineCache[key] = meta;
+        if (!_disableRoutineCache)
+        {
+            RoutineCache[key] = meta;
+        }
         return meta;
     }
 

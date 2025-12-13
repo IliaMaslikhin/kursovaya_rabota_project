@@ -1,4 +1,5 @@
 using OilErp.Core.Dto;
+using OilErp.Core.Util;
 using OilErp.Core.Services.Plants.ANPZ;
 using OilErp.Infrastructure.Adapters;
 using OilErp.Tests.Runner.Util;
@@ -20,7 +21,8 @@ public class NegativeSmokeTests
         {
             var storage = TestEnvironment.CreateStorageAdapter(DatabaseProfile.PlantAnpz);
             var svc = new SpInsertMeasurementBatchService(storage);
-            var payload = "[{\"label\":\"A\",\"ts\":\"2025-01-01T00:00:00Z\",\"thickness\":12.3}]";
+            var payload = MeasurementBatchPayloadBuilder.BuildJson(
+                new MeasurementPointDto("A", new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc), 12.3m));
             await svc.sp_insert_measurement_batchAsync("", payload, "ANPZ", CancellationToken.None);
             return new TestResult(testName, false, "ожидалось исключение при пустом asset_code");
         }

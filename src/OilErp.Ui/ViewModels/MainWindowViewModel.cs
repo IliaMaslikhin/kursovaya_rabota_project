@@ -30,6 +30,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty] private DiagnosticsPanelViewModel? diagnostics;
 
+    [ObservableProperty] private EventQueueViewModel? eventQueue;
+
     private async Task OnConnectAsync(string connectionString)
     {
         try
@@ -50,6 +52,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             Analytics = new AnalyticsPanelViewModel(kernelGateway.Storage);
             Measurements = new MeasurementsPanelViewModel(dataProvider, snapshotService, ingestionService);
             Diagnostics = new DiagnosticsPanelViewModel(storageFactory);
+            EventQueue = new EventQueueViewModel(kernelGateway.Storage);
             AppLogger.Info("[ui] launching analytics load");
             await Analytics.LoadAsync();
             AppLogger.Info("[ui] launching measurements load");

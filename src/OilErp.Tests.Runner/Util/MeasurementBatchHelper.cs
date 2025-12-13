@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using OilErp.Core.Dto;
+using OilErp.Core.Util;
 
 namespace OilErp.Tests.Runner.Util;
 
@@ -24,7 +26,12 @@ internal static class MeasurementBatchHelper
         var source = root.TryGetProperty("source_plant", out var sp) && sp.ValueKind == JsonValueKind.String
             ? sp.GetString() ?? "ANPZ"
             : "ANPZ";
-        var pointsJson = root.GetProperty("points").GetRawText();
+
+        if (!root.TryGetProperty("points", out var pointsElement) || pointsElement.ValueKind != JsonValueKind.Array)
+            throw new InvalidOperationException("points array is required");
+
+        var points = pointsElement.EnumerateArray().Select(ReadPoint).ToList();
+        var pointsJson = MeasurementBatchPayloadBuilder.BuildJson(points);
         return (asset, source, pointsJson);
     }
 
@@ -42,7 +49,7 @@ internal static class MeasurementBatchHelper
         if (idxAsset < 0 || idxLabel < 0 || idxTs < 0 || idxThk < 0)
             throw new InvalidOperationException("CSV header must include asset_code,label,ts,thickness");
 
-        var points = new List<Dictionary<string, object?>>();
+        var points = new List<MeasurementPointDto>();
         string assetCode = string.Empty;
         string sourcePlant = "ANPZ";
         foreach (var line in lines.Skip(1))
@@ -63,17 +70,31 @@ internal static class MeasurementBatchHelper
             if (!decimal.TryParse(thkStr, NumberStyles.Number, CultureInfo.InvariantCulture, out var thk))
                 throw new InvalidOperationException($"Invalid thickness: {thkStr}");
 
-            points.Add(new Dictionary<string, object?>
-            {
-                ["label"] = lbl,
-                ["ts"] = ts.ToString("o"),
-                ["thickness"] = thk,
-                ["note"] = string.IsNullOrWhiteSpace(note) ? null : note
-            });
+            points.Add(new MeasurementPointDto(lbl, ts, thk, string.IsNullOrWhiteSpace(note) ? null : note));
         }
         if (string.IsNullOrWhiteSpace(assetCode)) throw new InvalidOperationException("asset_code missing in CSV");
-        var json = JsonSerializer.Serialize(points);
+        var json = MeasurementBatchPayloadBuilder.BuildJson(points);
         return (assetCode, sourcePlant, json);
+    }
+
+    private static MeasurementPointDto ReadPoint(JsonElement element)
+    {
+        var label = element.GetProperty("label").GetString() ?? throw new InvalidOperationException("label is required");
+        var ts = element.GetProperty("ts").GetDateTime();
+        var thickness = element.GetProperty("thickness").GetDecimal();
+
+        string? note = null;
+        if (element.TryGetProperty("note", out var noteElement))
+        {
+            note = noteElement.ValueKind switch
+            {
+                JsonValueKind.Null => null,
+                JsonValueKind.String => noteElement.GetString(),
+                _ => noteElement.ToString()
+            };
+        }
+
+        return new MeasurementPointDto(label, ts, thickness, note);
     }
 
     private static string[] SplitCsv(string line)

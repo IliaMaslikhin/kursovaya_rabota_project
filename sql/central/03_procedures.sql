@@ -1,19 +1,35 @@
 -- Основная логика перенесена в процедуры; функции-обёртки делегируют вызовы сюда.
 
+-- При изменении OUT-параметров PostgreSQL не позволяет CREATE OR REPLACE.
+-- Чтобы автосинхронизация могла обновлять БД со старых версий, удаляем старые варианты процедур.
+DROP PROCEDURE IF EXISTS public.sp_ingest_events(integer);
+DROP PROCEDURE IF EXISTS public.sp_events_enqueue(text, text, jsonb);
+DROP PROCEDURE IF EXISTS public.sp_events_requeue(bigint[]);
+DROP PROCEDURE IF EXISTS public.sp_events_cleanup(interval);
+DROP PROCEDURE IF EXISTS public.sp_policy_upsert(text, numeric, numeric, numeric);
+DROP PROCEDURE IF EXISTS public.sp_asset_upsert(text, text, text, text);
+
 CREATE OR REPLACE PROCEDURE public.sp_ingest_events(
-  IN p_limit int DEFAULT 1000,
+  IN p_limit int,
   OUT processed int)
 LANGUAGE plpgsql
 AS $$
 BEGIN
   processed := 0;
+
+  -- discard/close out any unexpected event types so they don't block the queue
+  UPDATE public.events_inbox
+  SET processed_at = now()
+  WHERE processed_at IS NULL
+    AND event_type IS DISTINCT FROM 'HC_MEASUREMENT_BATCH';
+
   WITH cte AS (
     SELECT id, source_plant, payload_json
     FROM public.events_inbox
     WHERE processed_at IS NULL
+      AND event_type = 'HC_MEASUREMENT_BATCH'
       AND payload_json ? 'asset_code'
       AND NULLIF(trim(payload_json->>'asset_code'), '') IS NOT NULL
-      AND (event_type IS NULL OR event_type = 'HC_MEASUREMENT_BATCH')
     ORDER BY id
     LIMIT GREATEST(1, p_limit)
     FOR UPDATE SKIP LOCKED
@@ -81,9 +97,22 @@ CREATE OR REPLACE PROCEDURE public.sp_events_enqueue(
 LANGUAGE plpgsql
 AS $$
 BEGIN
+  IF p_event_type IS NULL OR trim(p_event_type) = '' THEN
+    RAISE EXCEPTION 'event_type is required';
+  END IF;
+  IF p_event_type <> 'HC_MEASUREMENT_BATCH' THEN
+    RAISE EXCEPTION 'unsupported event_type: %', p_event_type;
+  END IF;
+
   INSERT INTO public.events_inbox(event_type, source_plant, payload_json)
   VALUES (p_event_type, p_source_plant, COALESCE(p_payload, '{}'::jsonb))
   RETURNING id INTO p_id;
+
+  PERFORM pg_notify('events_enqueue', jsonb_build_object(
+    'id', p_id,
+    'event_type', p_event_type,
+    'source_plant', p_source_plant,
+    'ts', now())::text);
 END$$;
 
 CREATE OR REPLACE PROCEDURE public.sp_events_requeue(
@@ -94,10 +123,15 @@ AS $$
 BEGIN
   UPDATE public.events_inbox SET processed_at = NULL WHERE id = ANY(p_ids);
   GET DIAGNOSTICS n = ROW_COUNT;
+
+  PERFORM pg_notify('events_requeue', jsonb_build_object(
+    'count', n,
+    'ids', p_ids,
+    'ts', now())::text);
 END$$;
 
 CREATE OR REPLACE PROCEDURE public.sp_events_cleanup(
-  IN p_older_than interval DEFAULT '30 days',
+  IN p_older_than interval,
   OUT n int)
 LANGUAGE plpgsql
 AS $$
@@ -106,6 +140,11 @@ BEGIN
   WHERE processed_at IS NOT NULL
     AND processed_at < now() - p_older_than;
   GET DIAGNOSTICS n = ROW_COUNT;
+
+  PERFORM pg_notify('events_cleanup', jsonb_build_object(
+    'count', n,
+    'older_than', p_older_than,
+    'ts', now())::text);
 END$$;
 
 CREATE OR REPLACE PROCEDURE public.sp_policy_upsert(
@@ -132,9 +171,9 @@ END$$;
 
 CREATE OR REPLACE PROCEDURE public.sp_asset_upsert(
   IN p_asset_code text,
-  IN p_name text DEFAULT NULL,
-  IN p_type text DEFAULT NULL,
-  IN p_plant_code text DEFAULT NULL,
+  IN p_name text,
+  IN p_type text,
+  IN p_plant_code text,
   OUT p_id bigint)
 LANGUAGE plpgsql
 AS $$

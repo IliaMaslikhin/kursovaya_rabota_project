@@ -64,6 +64,7 @@ namespace OilErp.Tests.Runner;
         var profilesSmoke = new ProfilesSmoke();
         var negativeSmoke = new NegativeSmokeTests();
         var listenSmoke = new ListenSmokeTests();
+        var plantE2eSmoke = new PlantE2eSmokeTests();
 
         const string CategoryConnection = "Подключение к базе";
         const string CategoryIngestion = "Загрузка и очередь";
@@ -228,6 +229,14 @@ namespace OilErp.Tests.Runner;
             profilesSmoke.TestPlantInsertAndFdwRoundtrip);
 
         RegisterScenario(
+            "Plant_Events_Reach_Analytics",
+            CategoryIngestion,
+            "Заводские события доходят до analytics_cr",
+            "Ingest обновляет аналитику и очищает очередь",
+            "События не доходят до analytics_cr или остаются в очереди",
+            plantE2eSmoke.TestPlantEventsReachAnalytics);
+
+        RegisterScenario(
             "Bulk_Events_Rollback_Safe",
             CategoryIngestion,
             "Массовый ingest с откатом",
@@ -362,7 +371,7 @@ namespace OilErp.Tests.Runner;
         Console.WriteLine("  top-by-cr --plant <текст> --take <N>");
         Console.WriteLine("  eval-risk --asset <id> [--policy <имя>]");
         Console.WriteLine("  plant-cr --plant <текст> --from <гггг-мм-дд> --to <гггг-мм-дд>");
-        Console.WriteLine("  watch --channel <текст> [--timeout-sec <N>]");
+        Console.WriteLine("  watch --channel <текст> [--timeout-sec <N>]  (events_ingest, events_enqueue, events_requeue, events_cleanup)");
         Console.WriteLine();
     }
 

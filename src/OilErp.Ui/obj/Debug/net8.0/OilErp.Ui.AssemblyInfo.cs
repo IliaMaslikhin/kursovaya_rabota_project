@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("OilErp.Ui")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6b0ec2a22c85a247e7cf4476237f2a96ca2296ab")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e70b762048656495593fd0ae31c9a94fcca285ea")]
 [assembly: System.Reflection.AssemblyProductAttribute("OilErp.Ui")]
 [assembly: System.Reflection.AssemblyTitleAttribute("OilErp.Ui")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

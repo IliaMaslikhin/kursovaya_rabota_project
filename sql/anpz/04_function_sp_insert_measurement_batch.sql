@@ -18,14 +18,16 @@ BEGIN
   END IF;
 
   -- очистка и валидация точек
-  SELECT jsonb_agg(obj) INTO v_clean
+  SELECT jsonb_agg(obj ORDER BY ts, lbl) INTO v_clean
   FROM (
     SELECT jsonb_build_object(
              'label', lbl,
              'ts', ts::timestamptz,
              'thickness', thk,
              'note', note
-           ) AS obj
+           ) AS obj,
+           ts,
+           lbl
     FROM (
       SELECT
         NULLIF(trim(x->>'label'),'') AS lbl,

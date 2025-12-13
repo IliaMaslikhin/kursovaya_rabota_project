@@ -1,6 +1,7 @@
 using OilErp.Core.Dto;
 using OilErp.Core.Operations;
 using OilErp.Core.Services.Plants.ANPZ;
+using OilErp.Core.Util;
 using OilErp.Infrastructure.Adapters;
 using OilErp.Infrastructure.Config;
 using OilErp.Tests.Runner.Util;
@@ -75,7 +76,8 @@ public class ProfilesSmoke
 
                 var svcFn = new SpInsertMeasurementBatchService(storage);
                 var svcPrc = new SpInsertMeasurementBatchPrcService(storage);
-                var json = "[{\"label\":\"HC\",\"ts\":\"2025-01-01T00:00:00Z\",\"thickness\":12.34}]";
+                var json = MeasurementBatchPayloadBuilder.BuildJson(
+                    new MeasurementPointDto("HC", new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc), 12.34m));
                 await svcFn.sp_insert_measurement_batchAsync($"HC_FN_{plant.DefaultPlant}", json, plant.DefaultPlant, CancellationToken.None);
                 await svcPrc.sp_insert_measurement_batch_prcAsync($"HC_PRC_{plant.DefaultPlant}", json, plant.DefaultPlant, CancellationToken.None);
 

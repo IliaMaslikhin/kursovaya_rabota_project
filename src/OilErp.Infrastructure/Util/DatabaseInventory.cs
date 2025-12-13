@@ -49,18 +49,18 @@ public sealed class DatabaseInventoryInspector
 
         var snapshot = await GetSnapshotAsync();
         var missing = expected.Where(req => !Exists(snapshot, req)).ToList();
+        var signatureIssues = await FindSignatureMismatchesAsync(expected);
 
-        if (missing.Count > 0)
+        if (missing.Count > 0 || signatureIssues.Count > 0)
         {
-            var autoCreated = await TryAutoCreateObjectsAsync(Profile, missing);
-            if (autoCreated)
+            var autoApplied = await TryAutoApplyProfileScriptsAsync(Profile, missing.Count, signatureIssues.Count);
+            if (autoApplied)
             {
                 snapshot = await GetSnapshotAsync(forceReload: true);
                 missing = expected.Where(req => !Exists(snapshot, req)).ToList();
+                signatureIssues = await FindSignatureMismatchesAsync(expected);
             }
         }
-
-        var signatureIssues = await FindSignatureMismatchesAsync(expected);
 
         if (missing.Count == 0 && signatureIssues.Count == 0)
         {
@@ -154,10 +154,13 @@ public sealed class DatabaseInventoryInspector
         await using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = """
-                select table_schema || '.' || table_name
-                from information_schema.tables
-                where table_schema not in ('pg_catalog', 'information_schema')
-                  and table_type = 'BASE TABLE'
+                select ns.nspname || '.' || cls.relname
+                from pg_class cls
+                join pg_namespace ns on ns.oid = cls.relnamespace
+                where ns.nspname not in ('pg_catalog', 'information_schema', 'pg_toast')
+                  and ns.nspname not like 'pg_temp_%'
+                  and ns.nspname not like 'pg_toast_temp_%'
+                  and cls.relkind in ('r', 'f', 'p')
                 """;
             await using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -243,16 +246,17 @@ public sealed class DatabaseInventoryInspector
         };
     }
 
-    private async Task<bool> TryAutoCreateObjectsAsync(DatabaseProfile profile, IReadOnlyCollection<DbObjectRequirement> missing)
+    private async Task<bool> TryAutoApplyProfileScriptsAsync(DatabaseProfile profile, int missingCount, int signatureMismatchCount)
     {
         if (profile == DatabaseProfile.Unknown) return false;
         if (_sqlRoot == null) return false;
         var scripts = GetProfileScripts(profile);
         if (scripts.Length == 0) return false;
 
-        Console.WriteLine($"[Валидация] Обнаружены отсутствующие объекты ({missing.Count}). Пытаемся автосоздать через SQL скрипты профиля {profile}.");
+        Console.WriteLine($"[Валидация] Профиль {profile}: требуется синхронизация SQL (missing={missingCount}, signatureMismatch={signatureMismatchCount}). Пробуем применить скрипты из sql/.");
         try
         {
+            var builder = new NpgsqlConnectionStringBuilder(_connectionString);
             await using var conn = new NpgsqlConnection(_connectionString);
             await conn.OpenAsync();
             foreach (var relative in scripts)
@@ -269,6 +273,12 @@ public sealed class DatabaseInventoryInspector
                 await using var cmd = conn.CreateCommand();
                 cmd.CommandText = sql;
                 await cmd.ExecuteNonQueryAsync();
+
+                if ((profile == DatabaseProfile.PlantAnpz || profile == DatabaseProfile.PlantKrnpz)
+                    && string.Equals(Path.GetFileName(relative), "02_fdw.sql", StringComparison.OrdinalIgnoreCase))
+                {
+                    await EnsurePlantFdwMappingAsync(conn, builder);
+                }
             }
 
             Console.WriteLine("[Валидация] Автосоздание завершено, запускаем повторную проверку.");
@@ -279,6 +289,93 @@ public sealed class DatabaseInventoryInspector
             Console.WriteLine($"[Валидация] Автосоздание не удалось: {ex.Message}");
             return false;
         }
+    }
+
+    private static async Task EnsurePlantFdwMappingAsync(NpgsqlConnection conn, NpgsqlConnectionStringBuilder currentDb)
+    {
+        var host = currentDb.Host;
+        if (string.IsNullOrWhiteSpace(host)) host = "localhost";
+        var primaryHost = host.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault()
+                          ?? "localhost";
+        var port = currentDb.Port > 0 ? currentDb.Port.ToString() : "5432";
+        const string centralDbName = "central";
+        var user = string.IsNullOrWhiteSpace(currentDb.Username) ? "postgres" : currentDb.Username;
+        var password = currentDb.Password;
+
+        var alterServerSql =
+            $"ALTER SERVER central_srv OPTIONS (SET host {PgLiteral(primaryHost)}, SET dbname {PgLiteral(centralDbName)}, SET port {PgLiteral(port)});";
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = alterServerSql;
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        var createMappingSql = string.IsNullOrWhiteSpace(password)
+            ? $"""
+               DO $$
+               BEGIN
+                 IF NOT EXISTS (
+                   SELECT 1
+                   FROM pg_user_mappings m
+                   JOIN pg_foreign_server s ON s.oid = m.srvid
+                   WHERE s.srvname = 'central_srv'
+                     AND m.umuser = (SELECT oid FROM pg_roles WHERE rolname = CURRENT_USER)
+                 ) THEN
+                   EXECUTE format('CREATE USER MAPPING FOR %I SERVER central_srv OPTIONS (user %L)', CURRENT_USER, {PgLiteral(user)});
+                 END IF;
+               END$$;
+               """
+            : $"""
+               DO $$
+               BEGIN
+                 IF NOT EXISTS (
+                   SELECT 1
+                   FROM pg_user_mappings m
+                   JOIN pg_foreign_server s ON s.oid = m.srvid
+                   WHERE s.srvname = 'central_srv'
+                     AND m.umuser = (SELECT oid FROM pg_roles WHERE rolname = CURRENT_USER)
+                 ) THEN
+                   EXECUTE format('CREATE USER MAPPING FOR %I SERVER central_srv OPTIONS (user %L, password %L)',
+                     CURRENT_USER, {PgLiteral(user)}, {PgLiteral(password)});
+                 END IF;
+               END$$;
+               """;
+
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = createMappingSql;
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        // Ensure correct remote user.
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = $"ALTER USER MAPPING FOR CURRENT_USER SERVER central_srv OPTIONS (SET user {PgLiteral(user)});";
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        // Ensure password from the user's connection string is applied even if the option didn't exist before.
+        if (!string.IsNullOrWhiteSpace(password))
+        {
+            try
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"ALTER USER MAPPING FOR CURRENT_USER SERVER central_srv OPTIONS (SET password {PgLiteral(password)});";
+                await cmd.ExecuteNonQueryAsync();
+            }
+            catch (PostgresException pg) when (pg.SqlState == "42704")
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"ALTER USER MAPPING FOR CURRENT_USER SERVER central_srv OPTIONS (ADD password {PgLiteral(password)});";
+                await cmd.ExecuteNonQueryAsync();
+            }
+        }
+    }
+
+    private static string PgLiteral(string value)
+    {
+        if (value == null) throw new ArgumentNullException(nameof(value));
+        return "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
     }
 
     private static string[] GetProfileScripts(DatabaseProfile profile)
@@ -332,7 +429,10 @@ public sealed class DatabaseInventoryInspector
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         const string sql = """
             select n.nspname || '.' || p.proname as name,
-                   coalesce(pg_get_function_identity_arguments(p.oid), '') as signature
+                   case when p.prokind = 'p'
+                        then coalesce(pg_get_function_arguments(p.oid), '')
+                        else coalesce(pg_get_function_identity_arguments(p.oid), '')
+                   end as signature
             from pg_proc p
             join pg_namespace n on n.oid = p.pronamespace
             where n.nspname not in ('pg_catalog', 'information_schema')
@@ -358,11 +458,26 @@ public sealed class DatabaseInventoryInspector
         if (string.IsNullOrWhiteSpace(signature)) return string.Empty;
         var cleaned = signature.ToLowerInvariant();
         cleaned = cleaned.Replace(" ", string.Empty, StringComparison.Ordinal);
-        var idx = cleaned.IndexOf("default", StringComparison.Ordinal);
-        if (idx >= 0)
+
+        // remove DEFAULT expressions while keeping the rest of the arg list
+        while (true)
         {
-            cleaned = cleaned.Substring(0, idx);
+            var idx = cleaned.IndexOf("default", StringComparison.Ordinal);
+            if (idx < 0) break;
+            var comma = cleaned.IndexOf(',', idx);
+            cleaned = comma >= 0
+                ? cleaned.Remove(idx, comma - idx)
+                : cleaned.Substring(0, idx);
         }
+
+        // pg_get_function_* for PROCEDURE includes IN markers in args. We don't store IN in expectations.
+        // We only strip it when it's the parameter mode keyword (our params are named p_*).
+        if (cleaned.StartsWith("inp", StringComparison.Ordinal))
+        {
+            cleaned = cleaned.Substring(2);
+        }
+        cleaned = cleaned.Replace(",inp", ",p", StringComparison.Ordinal);
+
         return cleaned;
     }
 

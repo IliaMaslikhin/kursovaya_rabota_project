@@ -42,7 +42,7 @@ public sealed class KernelGateway
 
     public static KernelGateway Create(string connectionString)
     {
-        var config = new StorageConfig(connectionString ?? throw new ArgumentNullException(nameof(connectionString)), 30);
+        var config = new StorageConfig(connectionString ?? throw new ArgumentNullException(nameof(connectionString)), 30, ResolveDisableRoutineCacheFlag());
         AppLogger.Info($"[ui] init kernel gateway with conn='{config.ConnectionString}'");
         BootstrapResult? bootstrap = null;
         var bootstrapper = new DatabaseBootstrapper(config.ConnectionString);
@@ -95,5 +95,17 @@ public sealed class KernelGateway
         if (rows[0] is not decimal and not double and not float)
             throw new InvalidOperationException($"fn_calc_cr ожидался decimal, но получено {rows[0].GetType().Name}");
         AppLogger.Info("[ui] проверка fn_calc_cr прошла успешно");
+    }
+
+    private static bool ResolveDisableRoutineCacheFlag()
+    {
+        var flag = Environment.GetEnvironmentVariable("OILERP__DB__DISABLE_PROC_CACHE");
+        if (string.IsNullOrWhiteSpace(flag)) return false;
+        return flag.Trim().ToLowerInvariant() switch
+        {
+            "1" or "true" or "yes" or "on" => true,
+            "0" or "false" or "no" or "off" => false,
+            _ => false
+        };
     }
 }

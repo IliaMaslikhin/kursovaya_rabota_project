@@ -18,12 +18,12 @@
 | `Central.AnalyticsAssetSummary` | `public.fn_asset_summary_json` | Query | JSON | `p_asset_code text, p_policy_name text DEFAULT 'default'` |
 | `Central.AnalyticsTopAssetsByCr` | `public.fn_top_assets_by_cr` | Query | SET | `p_limit int DEFAULT 50` |
 | `Central.AnalyticsPlantCrStats` | `public.fn_plant_cr_stats` | Query | SET | `p_plant text, p_from timestamptz, p_to timestamptz` |
-| `Central.SpIngestEvents` | `public.sp_ingest_events` | Command | SCALAR (OUT) | `p_limit int DEFAULT 1000, OUT processed int` |
+| `Central.SpIngestEvents` | `public.sp_ingest_events` | Command | SCALAR (OUT) | `p_limit int, OUT processed int` |
 | `Central.SpEventsEnqueue` | `public.sp_events_enqueue` | Command | SCALAR (OUT) | `p_event_type text, p_source_plant text, p_payload jsonb, OUT p_id bigint` |
 | `Central.SpEventsRequeue` | `public.sp_events_requeue` | Command | SCALAR (OUT) | `p_ids bigint[], OUT n int` |
-| `Central.SpEventsCleanup` | `public.sp_events_cleanup` | Command | SCALAR (OUT) | `p_older_than interval DEFAULT '30 days', OUT n int` |
+| `Central.SpEventsCleanup` | `public.sp_events_cleanup` | Command | SCALAR (OUT) | `p_older_than interval, OUT n int` |
 | `Central.SpPolicyUpsert` | `public.sp_policy_upsert` | Command | SCALAR (OUT) | `p_name text, p_low numeric, p_med numeric, p_high numeric, OUT p_id bigint` |
-| `Central.SpAssetUpsert` | `public.sp_asset_upsert` | Command | SCALAR (OUT) | `p_asset_code text, p_name text DEFAULT NULL, p_type text DEFAULT NULL, p_plant_code text DEFAULT NULL, OUT p_id bigint` |
+| `Central.SpAssetUpsert` | `public.sp_asset_upsert` | Command | SCALAR (OUT) | `p_asset_code text, p_name text, p_type text, p_plant_code text, OUT p_id bigint` |
 
 Примечания
 - Kind определяется так: RETURNS SET/табличный → Query; RETURNS JSON/JSONB → Query; PROCEDURE/RETURNS void → Command; прочие скалярные возвращаемые типы помечены как SCALAR (доп. категория для ясности).

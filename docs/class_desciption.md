@@ -12,6 +12,7 @@
 - **Dto/MeasurementPointDto** — точка замера (метка, время, толщина, комментарий).
 - **Dto/OperationResult<T>** — результат операции с данными, ошибками и метаданными.
 - **Operations/OperationNames** — константы имён SQL-функций/процедур для центральной БД и заводов.
+- **Util/MeasurementBatchPayloadBuilder** — строит JSON payload для `sp_insert_measurement_batch`, нормализует точки/время и сортирует при необходимости.
 - **Services/Dtos/AssetSummaryDto** — десериализуемая модель JSON из `fn_asset_summary_json` (asset/analytics/risk).
 - **Services/Dtos/PlantCrAggregateDto** — агрегированная статистика CR по заводу за период.
 - **Services/Dtos/TopAssetCrDto** — элемент выдачи топ-CR.
@@ -49,8 +50,8 @@
 ## OilErp.Infrastructure
 - **Adapters/StorageAdapter** — реализация `IStoragePort` на Npgsql. `ExecuteQueryAsync` и `ExecuteCommandAsync` получают метаданные функции/процедуры из каталога, формируют вызов с параметрами, различают JSON/SETOF/скаляры, логируют через `AppLogger`. `BeginTransactionAsync` создаёт соединение+транзакцию, хранит их в `AsyncLocal` для повторных вызовов. `SubscribeAsync`/`UnsubscribeAsync` управляют отдельным LISTEN-соединением и поднимают событие `Notified`. Внутренний `PgTransactionScope` реализует `IStorageTransaction` с `CommitAsync`, `RollbackAsync`, а также методами сейвпоинтов (Create/RollbackTo/Release) сверх интерфейса.
 - **Adapters/KernelAdapter** — обёртка над `IStoragePort`, реализует `ICoreKernel.Storage`.
-- **Config/StorageConfig** — record с `ConnectionString` и тайм-аутом.
-- **Logging/AppLogger** — минимальный логгер (консоль + файл в %APPDATA%/OilErp/logs).
+- **Config/StorageConfig** — record с `ConnectionString`, тайм-аутом и флагом `DisableRoutineMetadataCache` (чтение `OILERP__DB__DISABLE_PROC_CACHE`).
+- **Logging/AppLogger** — минимальный логгер (консоль + файл в %APPDATA%/OilErp/logs); можно отключить консоль/файл через `OILERP__LOG__TO_CONSOLE`/`OILERP__LOG__TO_FILE` и задать каталог `OILERP__LOG__DIR` или программно вызвать `AppLogger.Configure`.
 
 ## OilErp.Ui
 ### Запуск/Views
@@ -86,10 +87,10 @@
 - **AnalyticsPanelViewModel** — команды `RefreshAsync`, `IngestAsync`; `LoadAsync` тянет `fn_top_assets_by_cr`, вызывает `fn_asset_summary_json` для риска/завода, строит `AnalyticsRowViewModel`.
 - **MeasurementsPanelViewModel** — команда `LoadAsync` (загрузка серий через `MeasurementDataProvider`), хранит `AddMeasurementFormViewModel`, делегирует отправку в `MeasurementIngestionService`, обновляет локальные серии.
 - **AddMeasurementFormViewModel** — хранит список заводов/активов, валидирует ввод замера, команда `SubmitAsync` вызывает колбэк, добавляет новые активы/заводы при появлении.
-- **DiagnosticsPanelViewModel** — подписка на LISTEN канал через центральный порт из `StoragePortFactory`; команды `StartAsync`/`StopAsync`, складывает `DiagnosticEntryViewModel`.
+- **EventQueueViewModel** — экран очереди: `fn_events_peek` (limit), `fn_events_requeue` по загруженным id, `fn_events_cleanup` с возрастом; подписка на `events_ingest` для прогресса.
+- **DiagnosticsPanelViewModel** — подписка на LISTEN канал через центральный порт из `StoragePortFactory`; команды `StartAsync`/`StopAsync`, складывает `DiagnosticEntryViewModel`, список популярных каналов и флаг авто-переподключения. Рекомендуемые каналы: `events_ingest`, `events_enqueue`, `events_requeue`, `events_cleanup`.
 - **DiagnosticEntryViewModel** — строка диагностического события (время, заголовок, детали).
-- **MeasurementAnalyticsEntryViewModel** — проекция точки замера для отображения (форматированные дата/толщина/примечание).
-- **MeasurementModels** — `AddMeasurementFormViewModel` и `MeasurementAnalyticsEntryViewModel` используют `MeasurementPointDto`.
+- **MeasurementModels** — `AddMeasurementFormViewModel` использует `MeasurementPointDto`.
 - **AddOperationFormViewModel** — UI-форма для вызовов команд ядра без прямых сервисов: варианты операций (`OperationOption` с `OperationKind`), команда `SubmitOperationAsync`, маршрутизация в `ExecuteAssetUpsertAsync`, `ExecutePolicyUpsertAsync`, `ExecuteEventEnqueueAsync`, простая валидация/JSON-проверка.
 - **AnalyticsRowViewModel** — запись таблицы аналитики (asset, plant, CR, риск, обновление).
 
@@ -105,6 +106,8 @@
 - **ValidationSmokeTests** — `TestDatabaseInventoryMatchesExpectations`, `TestConnectionProfileDetected`, `TestMissingObjectReminderFormatting`.
 - **BootstrapSmokeTests** — `TestMachineCodeMarkerPersisted`.
 - **ProfilesSmoke** — `TestAllProfilesInventory`, `TestPlantInsertAndFdwRoundtrip` (вставка через заводскую процедуру с откатом и проверкой FDW).
+- **PlantE2eSmokeTests** — убеждается, что события ANPZ/KRNPZ доходят до `analytics_cr` и очищают очередь; при отсутствии строк подключения помечает сценарий skipped.
+- **LoadSmokeTests** — нагрузочный ingest с откатом; включается через `OILERP__TESTS__ENABLE_LOAD=1`, объём задаётся `OILERP__TESTS__LOAD_EVENTS`.
 
 ### TestDoubles
 - **FakeStoragePort** — ин-мемори реализация `IStoragePort`: ведёт историю запросов/команд, счётчики вызовов, уведомления, транзакции (через `FakeTransaction`), искусственные задержки, события `Notified`, `Clear`.

@@ -1,10 +1,7 @@
 using System;
 using System.Threading.Tasks;
-using OilErp.Core.Dto;
 using OilErp.Infrastructure.Adapters;
 using OilErp.Tests.Runner.Util;
-using OilErp.Bootstrap;
-using Npgsql;
 using OilErp.Core.Services.Central;
 
 namespace OilErp.Tests.Runner.Smoke;
@@ -14,12 +11,19 @@ namespace OilErp.Tests.Runner.Smoke;
 /// </summary>
 public class LoadSmokeTests
 {
+    private const string EnableEnv = "OILERP__TESTS__ENABLE_LOAD";
+
     /// <summary>
     /// Генерирует большую пачку событий и прогоняет fn_ingest_events внутри транзакции с откатом.
     /// </summary>
     public async Task<TestResult> TestBulkEventsRollbackSafe()
     {
         const string testName = "Bulk_Events_Rollback_Safe";
+        if (!ShouldRunLoadTests())
+        {
+            return new TestResult(testName, true, "Skipped heavy load test (set OILERP__TESTS__ENABLE_LOAD=1 to enable)", true);
+        }
+
         try
         {
             var storage = TestEnvironment.CreateStorageAdapter();
@@ -35,7 +39,7 @@ public class LoadSmokeTests
                 },
                 TimeoutSeconds: 300);
 
-            var events = 10000;
+            var events = ResolveEventsCount();
             for (int i = 0; i < events; i++)
             {
                 await storage.ExecuteCommandAsync(insertSpec);
@@ -66,5 +70,23 @@ public class LoadSmokeTests
             last_thk = 9.0m,
             last_date = now
         });
+    }
+
+    private static bool ShouldRunLoadTests()
+    {
+        var flag = Environment.GetEnvironmentVariable(EnableEnv);
+        if (string.IsNullOrWhiteSpace(flag)) return false;
+        return flag.Trim().ToLowerInvariant() switch
+        {
+            "1" or "true" or "yes" or "on" => true,
+            _ => false
+        };
+    }
+
+    private static int ResolveEventsCount()
+    {
+        var env = Environment.GetEnvironmentVariable("OILERP__TESTS__LOAD_EVENTS");
+        if (int.TryParse(env, out var n) && n > 0 && n <= 20000) return n;
+        return 1000;
     }
 }

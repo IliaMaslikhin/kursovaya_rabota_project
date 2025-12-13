@@ -1,8 +1,6 @@
 using OilErp.Tests.Runner.Util;
 using OilErp.Core.Dto;
-using OilErp.Core.Contracts;
-using OilErp.Infrastructure.Adapters;
-using OilErp.Infrastructure.Config;
+using Npgsql;
 
 namespace OilErp.Tests.Runner.Smoke;
 
@@ -21,14 +19,31 @@ public class ListenSmokeTests
         {
             var storage = TestEnvironment.CreateStorageAdapter();
             var channel = $"hc_listen_cancel_{Guid.NewGuid():N}";
-            var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
-            storage.Notified += (_, _) => { };
+            var received = false;
+            EventHandler<DbNotification> handler = (_, n) =>
+            {
+                if (string.Equals(n.Channel, channel, StringComparison.Ordinal)) received = true;
+            };
+
+            storage.Notified += handler;
             await storage.SubscribeAsync(channel, CancellationToken.None);
-            cts.Cancel();
-            await Task.Delay(500); // дать слушателю завершиться
-            await storage.UnsubscribeAsync(channel);
-            storage.Notified -= (_, _) => { };
-            return new TestResult(testName, true);
+            await storage.UnsubscribeAsync(channel, CancellationToken.None);
+
+            // отправляем уведомление и убеждаемся, что оно не доставлено после отписки
+            await using (var conn = new NpgsqlConnection(TestEnvironment.LoadStorageConfig().ConnectionString))
+            {
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"notify \"{channel}\", 'ping'";
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await Task.Delay(300);
+            storage.Notified -= handler;
+
+            return received
+                ? new TestResult(testName, false, "уведомление получено после отписки")
+                : new TestResult(testName, true);
         }
         catch (Exception ex)
         {

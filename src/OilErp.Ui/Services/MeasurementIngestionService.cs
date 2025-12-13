@@ -1,11 +1,10 @@
 using System;
-using System.Collections.Generic;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using OilErp.Bootstrap;
 using OilErp.Core.Contracts;
 using OilErp.Core.Dto;
+using OilErp.Core.Util;
 using AnpzInsertService = OilErp.Core.Services.Plants.ANPZ.SpInsertMeasurementBatchService;
 using KrnpzInsertService = OilErp.Core.Services.Plants.KRNPZ.SpInsertMeasurementBatchService;
 using OilErp.Ui.Models;
@@ -31,7 +30,7 @@ public sealed class MeasurementIngestionService
     {
         var plant = NormalizePlant(request.Plant);
         var asset = request.AssetCode.Trim();
-        var payload = BuildPointsJson(request.Measurement);
+        var payload = MeasurementBatchPayloadBuilder.BuildJson(request.Measurement);
 
         try
         {
@@ -61,21 +60,6 @@ public sealed class MeasurementIngestionService
 
         var anpz = new AnpzInsertService(storage);
         return await anpz.sp_insert_measurement_batchAsync(assetCode, pointsJson, plant, ct);
-    }
-
-    private static string BuildPointsJson(MeasurementPointDto dto)
-    {
-        var payload = new[]
-        {
-            new Dictionary<string, object?>
-            {
-                ["label"] = dto.Label,
-                ["ts"] = dto.Ts.ToString("O"),
-                ["thickness"] = dto.Thickness,
-                ["note"] = dto.Note
-            }
-        };
-        return JsonSerializer.Serialize(payload);
     }
 
     private static string NormalizePlant(string plant)

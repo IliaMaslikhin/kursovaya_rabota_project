@@ -15,10 +15,4 @@
     <LangVersion>12</LangVersion>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Compile Include="Util\AppLogger.cs" />
-    <Compile Include="Util\FirstRunTracker.cs" />
-    <Compile Include="Util\DatabaseBootstrapper.cs" />
-    <Compile Include="Util\DatabaseInventory.cs" />
-  </ItemGroup>
 </Project>

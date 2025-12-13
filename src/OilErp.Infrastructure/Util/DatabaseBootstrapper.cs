@@ -40,30 +40,41 @@ public sealed class DatabaseBootstrapper
     {
         var isFirstRun = FirstRunTracker.IsFirstRun(out var machineCode);
         AppLogger.Info($"[bootstrap] старт проверки профиля (firstRun={isFirstRun}, machine={machineCode})");
-        var inspector = new DatabaseInventoryInspector(connectionString);
+        var centralInspector = new DatabaseInventoryInspector(connectionString);
         try
         {
             await EnsureDatabasesAsync();
 
-            var verification = await inspector.VerifyAsync();
-            inspector.PrintSummary();
-
-            if (verification.Success)
+            var inspectors = new[]
             {
-                FirstRunTracker.MarkCompleted(machineCode);
-                AppLogger.Info($"[bootstrap] проверка успешна profile={inspector.Profile}");
-                return BootstrapResult.Ok(inspector.Profile, isFirstRun, machineCode);
+                centralInspector,
+                new DatabaseInventoryInspector(WithDatabase(connectionString, "anpz")),
+                new DatabaseInventoryInspector(WithDatabase(connectionString, "krnpz"))
+            };
+
+            foreach (var inspector in inspectors)
+            {
+                var verification = await inspector.VerifyAsync();
+                inspector.PrintSummary();
+
+                if (verification.Success)
+                    continue;
+
+                var error = $"Профиль {inspector.Profile}: {verification.ErrorMessage ?? "Database verification failed"}";
+                var guidePath = TryCopyGuideToDesktop(inspector.Profile, error, machineCode);
+                AppLogger.Error($"[bootstrap] проверка не прошла: {error}");
+                return BootstrapResult.Fail(inspector.Profile, isFirstRun, machineCode, error, guidePath);
             }
 
-            var guidePath = TryCopyGuideToDesktop(inspector.Profile, verification.ErrorMessage, machineCode);
-            AppLogger.Error($"[bootstrap] проверка не прошла: {verification.ErrorMessage}");
-            return BootstrapResult.Fail(inspector.Profile, isFirstRun, machineCode, verification.ErrorMessage ?? "Database verification failed", guidePath);
+            FirstRunTracker.MarkCompleted(machineCode);
+            AppLogger.Info($"[bootstrap] проверка успешна profile={centralInspector.Profile}");
+            return BootstrapResult.Ok(centralInspector.Profile, isFirstRun, machineCode);
         }
         catch (Exception ex)
         {
-            var guidePath = TryCopyGuideToDesktop(inspector.Profile, ex.Message, machineCode);
+            var guidePath = TryCopyGuideToDesktop(centralInspector.Profile, ex.Message, machineCode);
             AppLogger.Error($"[bootstrap] ошибка: {ex.Message}");
-            return BootstrapResult.Fail(inspector.Profile, isFirstRun, machineCode, ex.Message, guidePath);
+            return BootstrapResult.Fail(centralInspector.Profile, isFirstRun, machineCode, ex.Message, guidePath);
         }
         finally
         {
@@ -99,6 +110,15 @@ public sealed class DatabaseBootstrapper
             await createCmd.ExecuteNonQueryAsync();
         }
         AppLogger.Info("[bootstrap] ensure databases completed");
+    }
+
+    private static string WithDatabase(string baseConnectionString, string database)
+    {
+        var builder = new NpgsqlConnectionStringBuilder(baseConnectionString)
+        {
+            Database = database
+        };
+        return builder.ConnectionString;
     }
 
     private string? TryCopyGuideToDesktop(DatabaseProfile profile, string? error, string machineCode)
