@@ -51,7 +51,7 @@ BEGIN
            NULLIF(x.value->>'ts','')::timestamptz AS ts,
            NULLIF(x.value->>'thickness','')::numeric AS thickness,
            NULLIF(x.value->>'note','') AS note
-    FROM jsonb_array_elements_with_ordinality(p_points) AS x(value, ordinality)
+    FROM jsonb_array_elements(p_points) WITH ORDINALITY AS x(value, ordinality)
   ),
   valid AS (
     SELECT * FROM parsed
@@ -116,11 +116,7 @@ BEGIN
            NULLIF(x.value->>'ts','')::timestamptz AS ts,
            NULLIF(x.value->>'thickness','')::numeric AS thickness,
            NULLIF(x.value->>'note','') AS note
-    FROM jsonb_array_elements_with_ordinality(p_points) AS x(value, ordinality)
-  ),
-  valid AS (
-    SELECT * FROM parsed
-    WHERE label IS NOT NULL AND ts IS NOT NULL AND thickness IS NOT NULL AND thickness > 0
+    FROM jsonb_array_elements(p_points) WITH ORDINALITY AS x(value, ordinality)
   ),
   valid AS (
     SELECT * FROM parsed

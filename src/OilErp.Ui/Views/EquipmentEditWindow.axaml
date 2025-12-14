@@ -1,0 +1,65 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OilErp.Ui.ViewModels"
+        x:Class="OilErp.Ui.Views.EquipmentEditWindow"
+        x:DataType="vm:EquipmentEditWindowViewModel"
+        Width="460"
+        Height="360"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="{Binding Title}">
+
+    <Grid RowDefinitions="Auto,*"
+          Margin="18"
+          RowSpacing="12">
+        <TextBlock Text="{Binding Title}"
+                   FontSize="18"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource Brush.TextPrimary}"/>
+
+        <Border Grid.Row="1"
+                Padding="14"
+                Background="{DynamicResource Brush.CardBackground}"
+                BorderBrush="{DynamicResource Brush.Border}"
+                BorderThickness="1"
+                CornerRadius="12">
+            <StackPanel Spacing="10">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="{Binding CodeLabel}"
+                               Foreground="{DynamicResource Brush.TextSecondary}"/>
+                    <TextBox Text="{Binding Code}"
+                             IsReadOnly="{Binding IsCodeReadOnly}"
+                             Watermark="Например: EQ-001"/>
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="{Binding Field1Label}"
+                               Foreground="{DynamicResource Brush.TextSecondary}"/>
+                    <TextBox Text="{Binding Field1}"
+                             Watermark="(опционально)"/>
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="{Binding Field2Label}"
+                               Foreground="{DynamicResource Brush.TextSecondary}"/>
+                    <TextBox Text="{Binding Field2}"
+                             Watermark="(опционально)"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal"
+                            Spacing="10"
+                            HorizontalAlignment="Right">
+                    <Button Content="Отмена"
+                            Command="{Binding CancelCommand}"/>
+                    <Button Content="Сохранить"
+                            Command="{Binding SaveCommand}"/>
+                </StackPanel>
+
+                <TextBlock Text="{Binding StatusMessage}"
+                           Foreground="{DynamicResource Brush.TextSecondary}"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
+

@@ -2,14 +2,78 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="OilErp.Ui.App"
              xmlns:local="using:OilErp.Ui"
-             RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+             RequestedThemeVariant="Dark">
 
     <Application.DataTemplates>
         <local:ViewLocator/>
     </Application.DataTemplates>
-  
+
+    <Application.Resources>
+        <SolidColorBrush x:Key="Brush.WindowBackground" Color="#000000"/>
+        <SolidColorBrush x:Key="Brush.PanelBackground" Color="#080A0F"/>
+        <SolidColorBrush x:Key="Brush.CardBackground" Color="#0D1018"/>
+        <SolidColorBrush x:Key="Brush.Border" Color="#1C1F29"/>
+        <SolidColorBrush x:Key="Brush.TextPrimary" Color="#E9ECF5"/>
+        <SolidColorBrush x:Key="Brush.TextSecondary" Color="#8A8EA0"/>
+        <SolidColorBrush x:Key="Brush.Accent" Color="#22D3EE"/>
+        <SolidColorBrush x:Key="Brush.AccentMuted" Color="#0EA5E9"/>
+        <SolidColorBrush x:Key="Brush.Critical" Color="#F87171"/>
+    </Application.Resources>
+
     <Application.Styles>
         <FluentTheme />
+
+        <Style Selector="Window">
+            <Setter Property="Background" Value="{DynamicResource Brush.WindowBackground}"/>
+        </Style>
+
+        <Style Selector="TabControl">
+            <Setter Property="Background" Value="{DynamicResource Brush.WindowBackground}"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+
+        <Style Selector="TabItem">
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+        </Style>
+
+        <Style Selector="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+        </Style>
+
+        <Style Selector="Button">
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Background" Value="{DynamicResource Brush.PanelBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+        </Style>
+
+        <Style Selector="TextBox">
+            <Setter Property="Background" Value="{DynamicResource Brush.CardBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+        </Style>
+
+        <Style Selector="ComboBox">
+            <Setter Property="Background" Value="{DynamicResource Brush.CardBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+        </Style>
+
+        <Style Selector="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+        </Style>
+
+        <Style Selector="ListBox">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+
+        <Style Selector="ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
     </Application.Styles>
 </Application>

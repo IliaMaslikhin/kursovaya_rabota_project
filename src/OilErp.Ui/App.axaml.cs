@@ -4,6 +4,8 @@ using Avalonia.Data.Core;
 using Avalonia.Data.Core.Plugins;
 using System.Linq;
 using Avalonia.Markup.Xaml;
+using Avalonia.Styling;
+using OilErp.Ui.Services;
 using OilErp.Ui.ViewModels;
 using OilErp.Ui.Views;
 
@@ -18,14 +20,17 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // Apply default ultra-dark theme on startup; user can switch in Settings.
+        ThemeManager.Apply(ThemePalette.UltraBlack, ThemeVariant.Dark);
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             // Avoid duplicate validations from both Avalonia and the CommunityToolkit. 
             // More info: https://docs.avaloniaui.net/docs/guides/development-guides/data-validation#manage-validationplugins
             DisableAvaloniaDataAnnotationValidation();
-            desktop.MainWindow = new MainWindow
+            desktop.MainWindow = new ConnectWindow
             {
-                DataContext = new MainWindowViewModel(),
+                DataContext = new ConnectWindowViewModel(desktop),
             };
         }
 

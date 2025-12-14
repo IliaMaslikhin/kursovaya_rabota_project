@@ -8,284 +8,924 @@
         d:DesignHeight="720"
         x:Class="OilErp.Ui.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="OilErp Central Console">
+        Title="{Binding Title}">
 
     <Design.DataContext>
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
     <Grid RowDefinitions="Auto,*"
-          RowSpacing="12"
-          Margin="20">
-        <Border CornerRadius="12"
-                Padding="16"
-                Background="#14171f"
-                BorderBrush="#2c3345"
+          RowSpacing="10"
+          Margin="12">
+        <Border Padding="10"
+                CornerRadius="10"
+                Background="{DynamicResource Brush.PanelBackground}"
+                BorderBrush="{DynamicResource Brush.Border}"
                 BorderThickness="1">
-            <StackPanel Spacing="12">
-                <TextBlock Text="Подключение к central"
-                           FontSize="20"
-                           FontWeight="SemiBold"
-                           Foreground="#e6eaf5"/>
-                <Grid ColumnDefinitions="*,*"
-                      ColumnSpacing="12"
-                      DataContext="{Binding ConnectionForm}">
-                    <StackPanel Spacing="6">
-                        <CheckBox Content="Использовать готовую строку"
-                                  IsChecked="{Binding UseCustomString}"
-                                  Foreground="#e6eaf5"/>
-                        <TextBox Text="{Binding ConnectionString}"
-                                 Watermark="Host=...;Username=...;Password=...;Database=central"
-                                 IsEnabled="{Binding UseCustomString}"/>
-                        <TextBlock Text="или соберите строку ниже"
-                                   Foreground="#9aa3b5"/>
-                        <Grid ColumnDefinitions="*,*"
-                              ColumnSpacing="8">
-                            <TextBox Text="{Binding Host}" Watermark="Host"/>
-                            <TextBox Grid.Column="1" Text="{Binding Database}" Watermark="Database"/>
-                        </Grid>
-                        <Grid ColumnDefinitions="*,*"
-                              ColumnSpacing="8">
-                            <TextBox Text="{Binding Username}" Watermark="Username"/>
-                            <TextBox Grid.Column="1" Text="{Binding Password}" Watermark="Password"/>
-                        </Grid>
-                        <TextBox Text="{Binding TimeoutSec}" Watermark="Timeout, sec"/>
+            <Grid ColumnDefinitions="Auto,*,Auto"
+                  ColumnSpacing="12"
+                  VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal"
+                            Spacing="10">
+                    <Ellipse Width="10"
+                             Height="10"
+                             Fill="{DynamicResource Brush.Accent}"
+                             VerticalAlignment="Center"/>
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="{Binding Title}"
+                                   FontSize="17"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding ConnectionDisplay}"
+                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                   FontSize="12"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="1"
-                                Spacing="8">
-                        <Button Content="Подключиться"
-                                Command="{Binding ConnectCommand}"/>
-                        <TextBlock Text="{Binding StatusMessage}"
-                                   Foreground="#9aa3b5"
-                                   TextWrapping="Wrap"/>
-                    </StackPanel>
-                </Grid>
-            </StackPanel>
+                </StackPanel>
+
+                <TextBlock Grid.Column="1"
+                           Text="{Binding Status}"
+                           Foreground="{DynamicResource Brush.TextSecondary}"
+                           TextWrapping="Wrap"/>
+
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            Spacing="6"
+                            HorizontalAlignment="Right">
+                    <Button Content="Сменить базу"
+                            Command="{Binding ChangeConnectionCommand}"/>
+                </StackPanel>
+            </Grid>
         </Border>
 
+        <!-- Central -->
         <TabControl Grid.Row="1"
-                    IsEnabled="{Binding IsConnected}"
-                    Margin="0,4,0,0">
-            <TabItem Header="Внесение данных">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Spacing="16"
-                                Margin="8"
-                                DataContext="{Binding DataEntry}">
-                        <TextBlock Text="Ввод данных в central"
-                                   FontSize="18"
-                                   FontWeight="SemiBold"
-                                   Foreground="#e6eaf5"/>
+                    Margin="0,4,0,0"
+                    IsVisible="{Binding IsCentralProfile}">
+            <TabItem Header="Оборудование">
+                <ContentControl Content="{Binding EquipmentCentral}">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:CentralEquipmentTabViewModel">
+                            <Grid RowDefinitions="Auto,Auto,*"
+                                  RowSpacing="10"
+                                  Margin="8">
+                                <StackPanel Orientation="Horizontal"
+                                            Spacing="8">
+                                    <Button Content="Обновить"
+                                            Command="{Binding RefreshCommand}"/>
+                                    <Button Content="+"
+                                            Width="40"
+                                            Command="{Binding AddCommand}"/>
+                                    <Button Content="Изменить"
+                                            Command="{Binding EditCommand}"/>
+                                    <Button Content="Удалить"
+                                            Command="{Binding DeleteCommand}"/>
+                                    <TextBlock Text="{Binding StatusMessage}"
+                                               Foreground="{DynamicResource Brush.TextSecondary}"
+                                               VerticalAlignment="Center"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
 
-                        <Border Padding="12" CornerRadius="10" Background="#11131a" BorderBrush="#2c3345" BorderThickness="1">
-                            <StackPanel Spacing="8">
-                                <TextBlock Text="Актив" FontWeight="SemiBold" Foreground="#e6eaf5"/>
-                                <TextBox Text="{Binding AssetCode}" Watermark="Код актива"/>
-                                <TextBox Text="{Binding AssetName}" Watermark="Название"/>
-                                <TextBox Text="{Binding AssetType}" Watermark="Тип"/>
-                                <TextBox Text="{Binding AssetPlant}" Watermark="Завод (ANPZ/KRNPZ)"/>
-                                <Button Content="Сохранить актив" Command="{Binding SaveAssetCommand}"/>
-                                <TextBlock Text="{Binding AssetStatus}" Foreground="#9aa3b5" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
+                                <Border Grid.Row="1"
+                                        Padding="10"
+                                        Background="{DynamicResource Brush.PanelBackground}"
+                                        BorderBrush="{DynamicResource Brush.Border}"
+                                        BorderThickness="1"
+                                        CornerRadius="8">
+                                    <Grid ColumnDefinitions="160,*,160,120">
+                                        <Border BorderBrush="{DynamicResource Brush.Border}"
+                                                BorderThickness="0,0,1,0"
+                                                Padding="6,2">
+                                            <TextBlock Text="Код"
+                                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                        </Border>
+                                        <Border Grid.Column="1"
+                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                BorderThickness="0,0,1,0"
+                                                Padding="6,2">
+                                            <TextBlock Text="Название"
+                                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                        </Border>
+                                        <Border Grid.Column="2"
+                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                BorderThickness="0,0,1,0"
+                                                Padding="6,2">
+                                            <TextBlock Text="Тип"
+                                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                        </Border>
+                                        <Border Grid.Column="3"
+                                                Padding="6,2">
+                                            <TextBlock Text="Источник"
+                                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                        <Border Padding="12" CornerRadius="10" Background="#11131a" BorderBrush="#2c3345" BorderThickness="1">
-                            <StackPanel Spacing="8">
-                                <TextBlock Text="Политика риска" FontWeight="SemiBold" Foreground="#e6eaf5"/>
-                                <TextBox Text="{Binding PolicyName}" Watermark="Имя политики"/>
-                                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
-                                    <TextBox Text="{Binding PolicyLow}" Watermark="Low"/>
-                                    <TextBox Grid.Column="1" Text="{Binding PolicyMed}" Watermark="Med"/>
-                                    <TextBox Grid.Column="2" Text="{Binding PolicyHigh}" Watermark="High"/>
-                                </Grid>
-                                <Button Content="Сохранить политику" Command="{Binding SavePolicyCommand}"/>
-                                <TextBlock Text="{Binding PolicyStatus}" Foreground="#9aa3b5" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-
-                        <Border Padding="12" CornerRadius="10" Background="#11131a" BorderBrush="#2c3345" BorderThickness="1">
-                            <StackPanel Spacing="8">
-                                <TextBlock Text="Событие из завода" FontWeight="SemiBold" Foreground="#e6eaf5"/>
-                                <TextBox Text="{Binding EventType}" Watermark="Тип события"/>
-                                <TextBox Text="{Binding EventPlant}" Watermark="Завод"/>
-                                <TextBox Text="{Binding EventPayload}" AcceptsReturn="True" Height="100" Watermark="JSON payload"/>
-                                <Button Content="Отправить событие" Command="{Binding EnqueueEventCommand}"/>
-                                <TextBlock Text="{Binding EventStatus}" Foreground="#9aa3b5" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </ScrollViewer>
+                                <ListBox Grid.Row="2"
+                                         ItemsSource="{Binding Items}"
+                                         SelectedItem="{Binding SelectedItem}"
+                                         BorderBrush="{DynamicResource Brush.Border}"
+                                         BorderThickness="1"
+                                         Background="{DynamicResource Brush.PanelBackground}">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:EquipmentItemViewModel">
+                                            <Border Padding="10"
+                                                    Background="{DynamicResource Brush.CardBackground}"
+                                                    BorderBrush="{DynamicResource Brush.Border}"
+                                                    BorderThickness="0,0,0,1">
+                                                <Grid ColumnDefinitions="160,*,160,120">
+                                                    <Border BorderBrush="{DynamicResource Brush.Border}"
+                                                            BorderThickness="0,0,1,0"
+                                                            Padding="6,2">
+                                                        <TextBlock Text="{Binding Code}"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource Brush.TextPrimary}"/>
+                                                    </Border>
+                                                    <Border Grid.Column="1"
+                                                            BorderBrush="{DynamicResource Brush.Border}"
+                                                            BorderThickness="0,0,1,0"
+                                                            Padding="6,2">
+                                                        <TextBlock Text="{Binding Name}"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                   TextWrapping="NoWrap"/>
+                                                    </Border>
+                                                    <Border Grid.Column="2"
+                                                            BorderBrush="{DynamicResource Brush.Border}"
+                                                            BorderThickness="0,0,1,0"
+                                                            Padding="6,2">
+                                                        <TextBlock Text="{Binding Type}"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                   TextWrapping="NoWrap"/>
+                                                    </Border>
+                                                    <Border Grid.Column="3"
+                                                            Padding="6,2">
+                                                        <TextBlock Text="{Binding PlantCode}"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                   TextWrapping="NoWrap"/>
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Grid>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
             </TabItem>
 
-            <TabItem Header="Аналитика">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Spacing="12"
-                                Margin="8"
-                                DataContext="{Binding Analytics}">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="Обновить" Command="{Binding RefreshCommand}"/>
-                            <Button Content="Собрать данные" Command="{Binding IngestCommand}"/>
-                            <TextBlock Text="{Binding StatusMessage}" Foreground="#9aa3b5" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                        </StackPanel>
-                        <ItemsControl ItemsSource="{Binding Items}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:AnalyticsRowViewModel">
-                                    <Border Padding="10"
-                                            Margin="0 0 0 8"
-                                            CornerRadius="8"
-                                            Background="#11131a"
-                                            BorderBrush="#2c3345"
-                                            BorderThickness="1">
-                                        <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="12">
-                                            <TextBlock Text="{Binding AssetCode}" FontWeight="SemiBold" Foreground="#e6eaf5"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding Plant}" Foreground="#9aa3b5"/>
-                                            <TextBlock Grid.Column="2" Text="{Binding CrDisplay}" Foreground="#e6eaf5"/>
-                                            <TextBlock Grid.Column="3" Text="{Binding Risk}" Foreground="#e6eaf5"/>
-                                            <TextBlock Grid.Column="4" Text="{Binding UpdatedAt}" Foreground="#9aa3b5"/>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
+            <TabItem Header="Замеры">
+                <ContentControl Content="{Binding MeasurementsCentral}">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:CentralMeasurementsTabViewModel">
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Auto">
+                                <StackPanel Spacing="10"
+                                            Margin="8">
+                                    <StackPanel Orientation="Horizontal"
+                                                Spacing="8">
+                                        <TextBlock Text="CENTRAL"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource Brush.TextPrimary}"
+                                                   VerticalAlignment="Center"/>
+                                        <Button Content="Обновить"
+                                                Command="{Binding RefreshCommand}"/>
+                                        <Button Content="+ замер"
+                                                Command="{Binding AddMeasurementCommand}"/>
+                                        <TextBlock Text="{Binding StatusMessage}"
+                                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                                   VerticalAlignment="Center"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
 
-            <TabItem Header="Измерения" DataContext="{Binding Measurements}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Spacing="12" Margin="8">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="Обновить" Command="{Binding LoadCommand}"/>
-                            <TextBlock Text="{Binding StatusMessage}" Foreground="#9aa3b5" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                        </StackPanel>
-                        <ItemsControl ItemsSource="{Binding Series}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
                                     <Border Padding="10"
-                                            Margin="0 0 0 8"
-                                            CornerRadius="8"
-                                            Background="#11131a"
-                                            BorderBrush="#2c3345"
-                                            BorderThickness="1">
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding AssetCode}" FontWeight="SemiBold" Foreground="#e6eaf5"/>
-                                            <TextBlock Text="{Binding SourcePlant}" Foreground="#9aa3b5"/>
-                                            <ItemsControl ItemsSource="{Binding Points}">
+                                            Background="{DynamicResource Brush.PanelBackground}"
+                                            BorderBrush="{DynamicResource Brush.Border}"
+                                            BorderThickness="1"
+                                            CornerRadius="8">
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="0">
+                                            <Border Width="160"
+                                                    Padding="6,0"
+                                                    BorderBrush="{DynamicResource Brush.Border}"
+                                                    BorderThickness="0,0,1,0">
+                                                <TextBlock Text="Код"
+                                                           Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                            </Border>
+                                            <Border Width="240"
+                                                    Padding="6,0"
+                                                    BorderBrush="{DynamicResource Brush.Border}"
+                                                    BorderThickness="0,0,1,0">
+                                                <TextBlock Text="Название"
+                                                           Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                            </Border>
+                                            <Border Width="160"
+                                                    Padding="6,0"
+                                                    BorderBrush="{DynamicResource Brush.Border}"
+                                                    BorderThickness="0,0,1,0">
+                                                <TextBlock Text="Тип"
+                                                           Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                            </Border>
+                                            <ItemsControl ItemsSource="{Binding Columns}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel Orientation="Horizontal"/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
                                                 <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Text="{Binding Label}" Foreground="#e6eaf5"/>
+                                                    <DataTemplate x:DataType="vm:CentralMeasurementColumnViewModel">
+                                                        <Border Width="120"
+                                                                Padding="6,0"
+                                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                                BorderThickness="0,0,1,0">
+                                                            <TextBlock Text="{Binding Header}"
+                                                                       Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                       TextWrapping="NoWrap"/>
+                                                        </Border>
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
                                         </StackPanel>
                                     </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
 
-                        <Border Padding="12" CornerRadius="10" Background="#11131a" BorderBrush="#2c3345" BorderThickness="1">
-                            <StackPanel Spacing="8" DataContext="{Binding MeasurementForm}">
-                                <TextBlock Text="Добавить замер" FontWeight="SemiBold" Foreground="#e6eaf5"/>
-                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                    <ComboBox ItemsSource="{Binding Plants}" SelectedItem="{Binding SelectedPlant}"/>
-                                    <ComboBox Grid.Column="1" ItemsSource="{Binding Assets}" SelectedItem="{Binding SelectedAsset}"/>
-                                </Grid>
-                                <TextBox Text="{Binding Label}" Watermark="Метка"/>
-                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                    <DatePicker SelectedDate="{Binding MeasurementDate}"/>
-                                    <TimePicker Grid.Column="1" SelectedTime="{Binding MeasurementTime}"/>
-                                </Grid>
-                                <TextBox Text="{Binding Thickness}" Watermark="Толщина"/>
-                                <TextBox Text="{Binding Note}" Watermark="Комментарий"/>
-                                <Button Content="Сохранить замер" Command="{Binding SubmitCommand}"/>
-                                <TextBlock Text="{Binding StatusMessage}" Foreground="#9aa3b5" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </ScrollViewer>
+                                    <ListBox ItemsSource="{Binding Rows}"
+                                             SelectedItem="{Binding SelectedRow}"
+                                             BorderBrush="{DynamicResource Brush.Border}"
+                                             BorderThickness="1"
+                                             Background="{DynamicResource Brush.PanelBackground}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:CentralMeasurementEquipmentRowViewModel">
+                                                <Border Padding="10"
+                                                        Background="{DynamicResource Brush.CardBackground}"
+                                                        BorderBrush="{DynamicResource Brush.Border}"
+                                                        BorderThickness="0,0,0,1">
+                                                    <StackPanel Orientation="Horizontal"
+                                                                Spacing="0">
+                                                        <Border Width="160"
+                                                                Padding="6,0"
+                                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                                BorderThickness="0,0,1,0">
+                                                            <TextBlock Text="{Binding Code}"
+                                                                       FontWeight="SemiBold"
+                                                                       Foreground="{DynamicResource Brush.TextPrimary}"
+                                                                       TextWrapping="NoWrap"/>
+                                                        </Border>
+                                                        <Border Width="240"
+                                                                Padding="6,0"
+                                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                                BorderThickness="0,0,1,0">
+                                                            <TextBlock Text="{Binding Name}"
+                                                                       Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                       TextWrapping="NoWrap"/>
+                                                        </Border>
+                                                        <Border Width="160"
+                                                                Padding="6,0"
+                                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                                BorderThickness="0,0,1,0">
+                                                            <TextBlock Text="{Binding Type}"
+                                                                       Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                       TextWrapping="NoWrap"/>
+                                                        </Border>
+
+                                                        <ItemsControl ItemsSource="{Binding Cells}">
+                                                            <ItemsControl.ItemsPanel>
+                                                                <ItemsPanelTemplate>
+                                                                    <StackPanel Orientation="Horizontal"/>
+                                                                </ItemsPanelTemplate>
+                                                            </ItemsControl.ItemsPanel>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <Border Width="120"
+                                                                            Padding="6,0"
+                                                                            BorderBrush="{DynamicResource Brush.Border}"
+                                                                            BorderThickness="0,0,1,0">
+                                                                        <TextBlock Text="{Binding .}"
+                                                                                   Foreground="{DynamicResource Brush.TextPrimary}"
+                                                                                   TextWrapping="NoWrap"/>
+                                                                    </Border>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
             </TabItem>
 
-            <TabItem Header="Очередь" DataContext="{Binding EventQueue}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Spacing="12" Margin="8">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Content="Обновить" Command="{Binding RefreshCommand}"/>
-                            <Button Content="Requeue" Command="{Binding RequeueCommand}"/>
-                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                <TextBlock Text="Лимит" Foreground="#9aa3b5"/>
-                                <TextBox Width="60" Text="{Binding Limit}"/>
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                <TextBlock Text="Очистить старше, сек" Foreground="#9aa3b5"/>
-                                <TextBox Width="80" Text="{Binding CleanupAgeSeconds}"/>
-                                <Button Content="Cleanup" Command="{Binding CleanupCommand}"/>
-                            </StackPanel>
-                            <TextBlock Text="{Binding StatusMessage}" Foreground="#9aa3b5" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                        </StackPanel>
+            <TabItem Header="Очередь / Ingest">
+                <ContentControl Content="{Binding EventQueue}">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:EventQueueViewModel">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel Spacing="12"
+                                            Margin="8">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Button Content="Обновить" Command="{Binding RefreshCommand}"/>
+                                        <Button Content="Вернуть" Command="{Binding RequeueCommand}"/>
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="4"
+                                                    VerticalAlignment="Center">
+                                            <TextBlock Text="Лимит"
+                                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                            <TextBox Width="60"
+                                                     Text="{Binding Limit}"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="4"
+                                                    VerticalAlignment="Center">
+                                            <TextBlock Text="Очистить старше, сек"
+                                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                            <TextBox Width="80"
+                                                     Text="{Binding CleanupAgeSeconds}"/>
+                                            <Button Content="Очистить"
+                                                    Command="{Binding CleanupCommand}"/>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding StatusMessage}"
+                                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                                   VerticalAlignment="Center"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
 
-                        <Border Padding="10" Background="#0e1119" BorderBrush="#2c3345" BorderThickness="1" CornerRadius="8">
-                            <StackPanel Spacing="6">
-                                <TextBlock Text="Непроцессed события" FontWeight="SemiBold" Foreground="#e6eaf5"/>
-                                <ItemsControl ItemsSource="{Binding Events}">
+                                    <Border Padding="10"
+                                            Background="{DynamicResource Brush.PanelBackground}"
+                                            BorderBrush="{DynamicResource Brush.Border}"
+                                            BorderThickness="1"
+                                            CornerRadius="8">
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="Необработанные события"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource Brush.TextPrimary}"/>
+                                            <ItemsControl ItemsSource="{Binding Events}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:EventQueueRowViewModel">
+                                                        <Border Padding="8"
+                                                                Margin="0 0 0 8"
+                                                                Background="{DynamicResource Brush.CardBackground}"
+                                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                                BorderThickness="1"
+                                                                CornerRadius="6">
+                                                            <StackPanel Spacing="4">
+                                                                <Grid ColumnDefinitions="Auto,*,Auto"
+                                                                      ColumnSpacing="10">
+                                                                    <TextBlock Text="{Binding Id}"
+                                                                               Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                                    <TextBlock Grid.Column="1"
+                                                                               Text="{Binding SourcePlant}"
+                                                                               Foreground="{DynamicResource Brush.TextPrimary}"/>
+                                                                    <TextBlock Grid.Column="2"
+                                                                               Text="{Binding EventType}"
+                                                                               Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                                </Grid>
+                                                                <TextBlock Text="{Binding CreatedAt}"
+                                                                           Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                                <TextBlock Text="{Binding Payload}"
+                                                                           Foreground="{DynamicResource Brush.TextPrimary}"
+                                                                           TextWrapping="Wrap"/>
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Padding="10"
+                                            Background="{DynamicResource Brush.PanelBackground}"
+                                            BorderBrush="{DynamicResource Brush.Border}"
+                                            BorderThickness="1"
+                                            CornerRadius="8">
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="events_ingest уведомления"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource Brush.TextPrimary}"/>
+                                            <ItemsControl ItemsSource="{Binding IngestNotifications}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding}"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+            </TabItem>
+
+            <TabItem Header="Аналитика">
+                <ContentControl Content="{Binding Analytics}">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:AnalyticsPanelViewModel">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel Spacing="12"
+                                            Margin="8">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Button Content="Обновить" Command="{Binding RefreshCommand}"/>
+                                        <Button Content="Собрать" Command="{Binding IngestCommand}"/>
+                                        <TextBlock Text="{Binding StatusMessage}"
+                                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                                   VerticalAlignment="Center"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+
+                                    <ItemsControl ItemsSource="{Binding Items}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:AnalyticsRowViewModel">
+                                                <Border Padding="10"
+                                                        Margin="0 0 0 8"
+                                                        CornerRadius="8"
+                                                        Background="{DynamicResource Brush.CardBackground}"
+                                                        BorderBrush="{DynamicResource Brush.Border}"
+                                                        BorderThickness="1">
+                                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto"
+                                                          ColumnSpacing="12">
+                                                        <TextBlock Text="{Binding AssetCode}"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource Brush.TextPrimary}"/>
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding Plant}"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                        <TextBlock Grid.Column="2"
+                                                                   Text="{Binding CrDisplay}"
+                                                                   Foreground="{DynamicResource Brush.TextPrimary}"/>
+                                                        <TextBlock Grid.Column="3"
+                                                                   Text="{Binding Risk}"
+                                                                   Foreground="{DynamicResource Brush.TextPrimary}"/>
+                                                        <TextBlock Grid.Column="4"
+                                                                   Text="{Binding UpdatedAt}"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+            </TabItem>
+
+            <TabItem Header="Политики рисков">
+                <ContentControl Content="{Binding PoliciesCentral}">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:CentralPoliciesTabViewModel">
+                            <Grid RowDefinitions="Auto,Auto,*"
+                                  RowSpacing="10"
+                                  Margin="8">
+                                <StackPanel Orientation="Horizontal"
+                                            Spacing="8">
+                                    <Button Content="Обновить"
+                                            Command="{Binding RefreshCommand}"/>
+                                    <Button Content="+"
+                                            Width="40"
+                                            Command="{Binding AddCommand}"/>
+                                    <Button Content="Изменить"
+                                            Command="{Binding EditCommand}"/>
+                                    <Button Content="Удалить"
+                                            Command="{Binding DeleteCommand}"/>
+                                    <TextBlock Text="{Binding StatusMessage}"
+                                               Foreground="{DynamicResource Brush.TextSecondary}"
+                                               VerticalAlignment="Center"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+
+                                <Border Grid.Row="1"
+                                        Padding="10"
+                                        Background="{DynamicResource Brush.PanelBackground}"
+                                        BorderBrush="{DynamicResource Brush.Border}"
+                                        BorderThickness="1"
+                                        CornerRadius="8">
+                                    <Grid ColumnDefinitions="220,*,*,*">
+                                        <Border BorderBrush="{DynamicResource Brush.Border}"
+                                                BorderThickness="0,0,1,0"
+                                                Padding="6,2">
+                                            <TextBlock Text="Имя"
+                                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                        </Border>
+                                        <Border Grid.Column="1"
+                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                BorderThickness="0,0,1,0"
+                                                Padding="6,2">
+                                            <TextBlock Text="Low"
+                                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                        </Border>
+                                        <Border Grid.Column="2"
+                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                BorderThickness="0,0,1,0"
+                                                Padding="6,2">
+                                            <TextBlock Text="Med"
+                                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                        </Border>
+                                        <Border Grid.Column="3"
+                                                Padding="6,2">
+                                            <TextBlock Text="High"
+                                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <ListBox Grid.Row="2"
+                                         ItemsSource="{Binding Items}"
+                                         SelectedItem="{Binding SelectedItem}"
+                                         BorderBrush="{DynamicResource Brush.Border}"
+                                         BorderThickness="1"
+                                         Background="{DynamicResource Brush.PanelBackground}">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:PolicyItemViewModel">
+                                            <Border Padding="10"
+                                                    Background="{DynamicResource Brush.CardBackground}"
+                                                    BorderBrush="{DynamicResource Brush.Border}"
+                                                    BorderThickness="0,0,0,1">
+                                                <Grid ColumnDefinitions="220,*,*,*">
+                                                    <Border BorderBrush="{DynamicResource Brush.Border}"
+                                                            BorderThickness="0,0,1,0"
+                                                            Padding="6,2">
+                                                        <TextBlock Text="{Binding Name}"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource Brush.TextPrimary}"/>
+                                                    </Border>
+                                                    <Border Grid.Column="1"
+                                                            BorderBrush="{DynamicResource Brush.Border}"
+                                                            BorderThickness="0,0,1,0"
+                                                            Padding="6,2">
+                                                        <TextBlock Text="{Binding Low}"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                   TextWrapping="NoWrap"/>
+                                                    </Border>
+                                                    <Border Grid.Column="2"
+                                                            BorderBrush="{DynamicResource Brush.Border}"
+                                                            BorderThickness="0,0,1,0"
+                                                            Padding="6,2">
+                                                        <TextBlock Text="{Binding Med}"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                   TextWrapping="NoWrap"/>
+                                                    </Border>
+                                                    <Border Grid.Column="3"
+                                                            Padding="6,2">
+                                                        <TextBlock Text="{Binding High}"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                   TextWrapping="NoWrap"/>
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Grid>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+            </TabItem>
+
+            <TabItem Header="Диагностика">
+                <ContentControl Content="{Binding Diagnostics}">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:DiagnosticsPanelViewModel">
+                            <StackPanel Spacing="8"
+                                        Margin="8">
+                                <StackPanel Orientation="Horizontal"
+                                            Spacing="8">
+                                    <ComboBox Width="220"
+                                              ItemsSource="{Binding AvailableChannels}"
+                                              SelectedItem="{Binding Channel}"
+                                              IsEditable="True"
+                                              PlaceholderText="Канал LISTEN"/>
+                                    <CheckBox Content="Авто-переподключение"
+                                              IsChecked="{Binding AutoReconnect}"
+                                              Foreground="{DynamicResource Brush.TextPrimary}"/>
+                                    <Button Content="Старт" Command="{Binding StartCommand}"/>
+                                    <Button Content="Стоп" Command="{Binding StopCommand}"/>
+                                    <TextBlock Text="{Binding StatusMessage}"
+                                               Foreground="{DynamicResource Brush.TextSecondary}"
+                                               VerticalAlignment="Center"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <ItemsControl ItemsSource="{Binding Entries}">
                                     <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:EventQueueRowViewModel">
-                                            <Border Padding="8" Margin="0 0 0 8" Background="#11131a" BorderBrush="#2c3345" BorderThickness="1" CornerRadius="6">
-                                                <StackPanel Spacing="4">
-                                                    <TextBlock Text="{Binding Id}" Foreground="#e6eaf5" FontWeight="SemiBold"/>
-                                                    <TextBlock Text="{Binding EventType}" Foreground="#9aa3b5"/>
-                                                    <TextBlock Text="{Binding SourcePlant}" Foreground="#9aa3b5"/>
-                                                    <TextBlock Text="{Binding CreatedAt}" Foreground="#9aa3b5"/>
-                                                    <TextBlock Text="{Binding Payload}" Foreground="#e6eaf5" TextWrapping="Wrap"/>
+                                        <DataTemplate>
+                                            <Border Padding="8"
+                                                    Margin="0 0 0 6"
+                                                    Background="{DynamicResource Brush.CardBackground}"
+                                                    BorderBrush="{DynamicResource Brush.Border}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="6">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Timestamp}"
+                                                               Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                    <TextBlock Text="{Binding Headline}"
+                                                               Foreground="{DynamicResource Brush.TextPrimary}"/>
+                                                    <TextBlock Text="{Binding Detail}"
+                                                               Foreground="{DynamicResource Brush.TextSecondary}"
+                                                               TextWrapping="Wrap"/>
                                                 </StackPanel>
                                             </Border>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                             </StackPanel>
-                        </Border>
-
-                        <Border Padding="10" Background="#0e1119" BorderBrush="#2c3345" BorderThickness="1" CornerRadius="8">
-                            <StackPanel Spacing="6">
-                                <TextBlock Text="events_ingest уведомления" FontWeight="SemiBold" Foreground="#e6eaf5"/>
-                                <ItemsControl ItemsSource="{Binding IngestNotifications}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding}" Foreground="#9aa3b5"/>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </ScrollViewer>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
             </TabItem>
 
-            <TabItem Header="Диагностика" DataContext="{Binding Diagnostics}">
-                <StackPanel Spacing="8" Margin="8">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <ComboBox Width="220"
-                                  ItemsSource="{Binding AvailableChannels}"
-                                  SelectedItem="{Binding Channel}"
-                                  IsEditable="True"
-                                  PlaceholderText="Канал LISTEN"/>
-                        <CheckBox Content="Авто-переподключение" IsChecked="{Binding AutoReconnect}" Foreground="#e6eaf5"/>
-                        <Button Content="Старт" Command="{Binding StartCommand}"/>
-                        <Button Content="Стоп" Command="{Binding StopCommand}"/>
-                        <TextBlock Text="{Binding StatusMessage}" Foreground="#9aa3b5" VerticalAlignment="Center" TextWrapping="Wrap"/>
+            <TabItem Header="Настройки">
+                <Border Margin="8"
+                        Padding="18"
+                        Background="{DynamicResource Brush.CardBackground}"
+                        BorderBrush="{DynamicResource Brush.Border}"
+                        BorderThickness="1"
+                        CornerRadius="10">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Сессия"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding Title}"
+                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                        <TextBlock Text="{Binding ConnectionDisplay}"
+                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+
+                        <Border Height="1"
+                                Margin="0,4"
+                                Background="{DynamicResource Brush.Border}"/>
+
+                        <TextBlock Text="Тема интерфейса"
+                                   FontWeight="SemiBold"/>
+                        <ComboBox ItemsSource="{Binding ThemeOptions}"
+                                  SelectedItem="{Binding SelectedTheme}"
+                                  Width="220"/>
+                        <TextBlock Text="Ultra black — глухой черный; JetBrains light — светлая как IDE."
+                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                   TextWrapping="Wrap"/>
                     </StackPanel>
-                    <ItemsControl ItemsSource="{Binding Entries}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Padding="8" Margin="0 0 0 6" Background="#11131a" BorderBrush="#2c3345" BorderThickness="1" CornerRadius="6">
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding Timestamp}" Foreground="#9aa3b5"/>
-                                        <TextBlock Text="{Binding Headline}" Foreground="#e6eaf5"/>
-                                        <TextBlock Text="{Binding Detail}" Foreground="#9aa3b5" TextWrapping="Wrap"/>
-                                    </StackPanel>
+                </Border>
+            </TabItem>
+        </TabControl>
+
+        <!-- Plants: only Equipment + Measurements -->
+        <TabControl Grid.Row="1"
+                    Margin="0,4,0,0"
+                    IsVisible="{Binding IsPlantProfile}">
+            <TabItem Header="Оборудование">
+                <ContentControl Content="{Binding EquipmentPlant}">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:PlantEquipmentTabViewModel">
+                            <Grid RowDefinitions="Auto,Auto,*"
+                                  RowSpacing="10"
+                                  Margin="8">
+                                <StackPanel Orientation="Horizontal"
+                                            Spacing="8">
+                                    <Button Content="Обновить"
+                                            Command="{Binding RefreshCommand}"/>
+                                    <Button Content="+"
+                                            Width="40"
+                                            Command="{Binding AddCommand}"/>
+                                    <Button Content="Изменить"
+                                            Command="{Binding EditCommand}"/>
+                                    <Button Content="Удалить"
+                                            Command="{Binding DeleteCommand}"/>
+                                    <TextBlock Text="{Binding StatusMessage}"
+                                               Foreground="{DynamicResource Brush.TextSecondary}"
+                                               VerticalAlignment="Center"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+
+                                <Border Grid.Row="1"
+                                        Padding="10"
+                                        Background="{DynamicResource Brush.PanelBackground}"
+                                        BorderBrush="{DynamicResource Brush.Border}"
+                                        BorderThickness="1"
+                                        CornerRadius="8">
+                                    <Grid ColumnDefinitions="160,*,140,180">
+                                        <Border BorderBrush="{DynamicResource Brush.Border}"
+                                                BorderThickness="0,0,1,0"
+                                                Padding="6,2">
+                                            <TextBlock Text="Код"
+                                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                        </Border>
+                                        <Border Grid.Column="1"
+                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                BorderThickness="0,0,1,0"
+                                                Padding="6,2">
+                                            <TextBlock Text="Локация"
+                                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                        </Border>
+                                        <Border Grid.Column="2"
+                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                BorderThickness="0,0,1,0"
+                                                Padding="6,2">
+                                            <TextBlock Text="Статус"
+                                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                        </Border>
+                                        <Border Grid.Column="3"
+                                                Padding="6,2">
+                                            <TextBlock Text="Создано"
+                                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                        </Border>
+                                    </Grid>
                                 </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
+
+                                <ListBox Grid.Row="2"
+                                         ItemsSource="{Binding Items}"
+                                         SelectedItem="{Binding SelectedItem}"
+                                         BorderBrush="{DynamicResource Brush.Border}"
+                                         BorderThickness="1"
+                                         Background="{DynamicResource Brush.PanelBackground}">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:PlantEquipmentItemViewModel">
+                                            <Border Padding="10"
+                                                    Background="{DynamicResource Brush.CardBackground}"
+                                                    BorderBrush="{DynamicResource Brush.Border}"
+                                                    BorderThickness="0,0,0,1">
+                                                <Grid ColumnDefinitions="160,*,140,180">
+                                                    <Border BorderBrush="{DynamicResource Brush.Border}"
+                                                            BorderThickness="0,0,1,0"
+                                                            Padding="6,2">
+                                                        <TextBlock Text="{Binding Code}"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource Brush.TextPrimary}"/>
+                                                    </Border>
+                                                    <Border Grid.Column="1"
+                                                            BorderBrush="{DynamicResource Brush.Border}"
+                                                            BorderThickness="0,0,1,0"
+                                                            Padding="6,2">
+                                                        <TextBlock Text="{Binding Location}"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                   TextWrapping="NoWrap"/>
+                                                    </Border>
+                                                    <Border Grid.Column="2"
+                                                            BorderBrush="{DynamicResource Brush.Border}"
+                                                            BorderThickness="0,0,1,0"
+                                                            Padding="6,2">
+                                                        <TextBlock Text="{Binding Status}"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                   TextWrapping="NoWrap"/>
+                                                    </Border>
+                                                    <Border Grid.Column="3"
+                                                            Padding="6,2">
+                                                        <TextBlock Text="{Binding CreatedAt}"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                   TextWrapping="NoWrap"/>
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Grid>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
+            </TabItem>
+
+            <TabItem Header="Замеры">
+                <ContentControl Content="{Binding MeasurementsPlant}">
+                    <ContentControl.ContentTemplate>
+                        <DataTemplate x:DataType="vm:PlantMeasurementsTabViewModel">
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Auto">
+                                <StackPanel Spacing="10"
+                                            Margin="8">
+                                    <StackPanel Orientation="Horizontal"
+                                                Spacing="8">
+                                        <TextBlock Text="{Binding PlantCode}"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource Brush.TextPrimary}"
+                                                   VerticalAlignment="Center"/>
+                                        <Button Content="Обновить"
+                                                Command="{Binding RefreshCommand}"/>
+                                        <Button Content="+ замер"
+                                                Command="{Binding AddMeasurementCommand}"/>
+                                        <TextBlock Text="{Binding StatusMessage}"
+                                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                                   VerticalAlignment="Center"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+
+                                    <Border Padding="10"
+                                            Background="{DynamicResource Brush.PanelBackground}"
+                                            BorderBrush="{DynamicResource Brush.Border}"
+                                            BorderThickness="1"
+                                            CornerRadius="8">
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="0">
+                                            <Border Width="160"
+                                                    Padding="6,0"
+                                                    BorderBrush="{DynamicResource Brush.Border}"
+                                                    BorderThickness="0,0,1,0">
+                                                <TextBlock Text="Код"
+                                                           Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                            </Border>
+                                            <Border Width="240"
+                                                    Padding="6,0"
+                                                    BorderBrush="{DynamicResource Brush.Border}"
+                                                    BorderThickness="0,0,1,0">
+                                                <TextBlock Text="Локация"
+                                                           Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                            </Border>
+                                            <Border Width="140"
+                                                    Padding="6,0"
+                                                    BorderBrush="{DynamicResource Brush.Border}"
+                                                    BorderThickness="0,0,1,0">
+                                                <TextBlock Text="Статус"
+                                                           Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                            </Border>
+                                            <ItemsControl ItemsSource="{Binding Columns}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel Orientation="Horizontal"/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:PlantMeasurementColumnViewModel">
+                                                        <Border Width="120"
+                                                                Padding="6,0"
+                                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                                BorderThickness="0,0,1,0">
+                                                            <TextBlock Text="{Binding Header}"
+                                                                       Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                       TextWrapping="NoWrap"/>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <ListBox ItemsSource="{Binding Rows}"
+                                             SelectedItem="{Binding SelectedRow}"
+                                             BorderBrush="{DynamicResource Brush.Border}"
+                                             BorderThickness="1"
+                                             Background="{DynamicResource Brush.PanelBackground}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:PlantMeasurementEquipmentRowViewModel">
+                                                <Border Padding="10"
+                                                        Background="{DynamicResource Brush.CardBackground}"
+                                                        BorderBrush="{DynamicResource Brush.Border}"
+                                                        BorderThickness="0,0,0,1">
+                                                    <StackPanel Orientation="Horizontal"
+                                                                Spacing="0">
+                                                        <Border Width="160"
+                                                                Padding="6,0"
+                                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                                BorderThickness="0,0,1,0">
+                                                            <TextBlock Text="{Binding Code}"
+                                                                       FontWeight="SemiBold"
+                                                                       Foreground="{DynamicResource Brush.TextPrimary}"
+                                                                       TextWrapping="NoWrap"/>
+                                                        </Border>
+                                                        <Border Width="240"
+                                                                Padding="6,0"
+                                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                                BorderThickness="0,0,1,0">
+                                                            <TextBlock Text="{Binding Location}"
+                                                                       Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                       TextWrapping="NoWrap"/>
+                                                        </Border>
+                                                        <Border Width="140"
+                                                                Padding="6,0"
+                                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                                BorderThickness="0,0,1,0">
+                                                            <TextBlock Text="{Binding Status}"
+                                                                       Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                       TextWrapping="NoWrap"/>
+                                                        </Border>
+
+                                                        <ItemsControl ItemsSource="{Binding Cells}">
+                                                            <ItemsControl.ItemsPanel>
+                                                                <ItemsPanelTemplate>
+                                                                    <StackPanel Orientation="Horizontal"/>
+                                                                </ItemsPanelTemplate>
+                                                            </ItemsControl.ItemsPanel>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <Border Width="120"
+                                                                            Padding="6,0"
+                                                                            BorderBrush="{DynamicResource Brush.Border}"
+                                                                            BorderThickness="0,0,1,0">
+                                                                        <TextBlock Text="{Binding .}"
+                                                                                   Foreground="{DynamicResource Brush.TextPrimary}"
+                                                                                   TextWrapping="NoWrap"/>
+                                                                    </Border>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                </ContentControl>
             </TabItem>
         </TabControl>
     </Grid>

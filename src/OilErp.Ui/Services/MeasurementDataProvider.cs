@@ -18,12 +18,10 @@ public sealed class MeasurementDataProvider
     private static readonly TimeSpan LiveLoadTimeout = TimeSpan.FromSeconds(10);
 
     private readonly IStoragePort storage;
-    private readonly MeasurementSnapshotService fallbackSnapshots;
 
-    public MeasurementDataProvider(IStoragePort storage, MeasurementSnapshotService fallbackSnapshots)
+    public MeasurementDataProvider(IStoragePort storage)
     {
         this.storage = storage;
-        this.fallbackSnapshots = fallbackSnapshots;
     }
 
     public async Task<MeasurementDataResult> LoadAsync(CancellationToken ct = default)
@@ -38,9 +36,8 @@ public sealed class MeasurementDataProvider
             return new MeasurementDataResult(series, "Данные из центральной БД (StorageAdapter).");
         }
 
-        // Если БД пуста — используем JSON как вспомогательную загрузку, но соединение обязательно.
-        AppLogger.Info("[ui] БД вернула пустой набор, добавляем JSON снапшоты");
-        return new MeasurementDataResult(fallbackSnapshots.LoadSeries(), "БД пуста, загружены резервные JSON-добивки.");
+        AppLogger.Info("[ui] БД вернула пустой набор измерений");
+        return new MeasurementDataResult(Array.Empty<MeasurementSeries>(), "БД пуста: измерений пока нет.");
     }
 
     private async Task<IReadOnlyList<MeasurementSeries>> LoadFromKernelAsync(CancellationToken ct)

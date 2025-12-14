@@ -1,0 +1,60 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OilErp.Ui.ViewModels"
+        x:Class="OilErp.Ui.Views.PlantMeasurementEditWindow"
+        x:DataType="vm:PlantMeasurementEditWindowViewModel"
+        Width="520"
+        Height="420"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="{Binding Title}">
+
+    <Grid RowDefinitions="Auto,*"
+          Margin="18"
+          RowSpacing="12">
+        <StackPanel Spacing="4">
+            <TextBlock Text="{Binding Title}"
+                       FontSize="18"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource Brush.TextPrimary}"/>
+            <TextBlock Text="{Binding PlantCode}"
+                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+            <TextBlock Text="{Binding EquipmentCode}"
+                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+        </StackPanel>
+
+        <Border Grid.Row="1"
+                Padding="14"
+                Background="{DynamicResource Brush.CardBackground}"
+                BorderBrush="{DynamicResource Brush.Border}"
+                BorderThickness="1"
+                CornerRadius="12">
+            <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="*,*"
+                      ColumnSpacing="10">
+                    <TextBox Text="{Binding Label}"
+                             Watermark="Метка точки (label)"/>
+                    <TextBox Grid.Column="1"
+                             Text="{Binding Thickness}"
+                             Watermark="Толщина"/>
+                </Grid>
+
+                <TextBox Text="{Binding Note}"
+                         Watermark="Комментарий (опционально)"/>
+
+                <StackPanel Orientation="Horizontal"
+                            Spacing="10"
+                            HorizontalAlignment="Right">
+                    <Button Content="Отмена"
+                            Command="{Binding CancelCommand}"/>
+                    <Button Content="Сохранить"
+                            Command="{Binding SaveCommand}"/>
+                </StackPanel>
+
+                <TextBlock Text="{Binding StatusMessage}"
+                           Foreground="{DynamicResource Brush.TextSecondary}"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

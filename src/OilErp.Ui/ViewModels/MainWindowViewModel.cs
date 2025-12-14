@@ -1,75 +1,144 @@
 ﻿using System;
-using System.Threading.Tasks;
+using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using OilErp.Bootstrap;
+using OilErp.Core.Dto;
 using OilErp.Ui.Services;
+using Avalonia.Styling;
 
 namespace OilErp.Ui.ViewModels;
 
 public sealed partial class MainWindowViewModel : ViewModelBase
 {
-    private KernelGateway? kernelGateway;
+    private readonly KernelGateway kernelGateway;
 
     public MainWindowViewModel()
     {
-        Status = "Подключение не установлено";
-        ConnectionForm = new ConnectionFormViewModel(OnConnectAsync, ReadDefaultConnection());
+        kernelGateway = null!;
+        Profile = DatabaseProfile.Central;
+        Title = "OilErp";
+        Status = "Design-time";
+        ConnectionDisplay = "Host=localhost;Database=central";
+        ThemeOptions = BuildThemeOptions();
+        SelectedTheme = ThemeOptions[0];
     }
 
-    public ConnectionFormViewModel ConnectionForm { get; }
+    public MainWindowViewModel(KernelGateway kernelGateway, DatabaseProfile profile, string connectionString)
+    {
+        this.kernelGateway = kernelGateway ?? throw new ArgumentNullException(nameof(kernelGateway));
+        Profile = profile;
+        Title = profile switch
+        {
+            DatabaseProfile.Central => "OilErp — Central",
+            DatabaseProfile.PlantAnpz => "OilErp — ANPZ",
+            DatabaseProfile.PlantKrnpz => "OilErp — KRNPZ",
+            _ => "OilErp"
+        };
 
-    [ObservableProperty] private bool isConnected;
+        ConnectionDisplay = SimplifyConnectionString(connectionString);
+        Status = kernelGateway.StatusMessage;
+        ThemeOptions = BuildThemeOptions();
+        SelectedTheme = ThemeOptions[0];
+
+        var storage = kernelGateway.Storage;
+        var factory = new StoragePortFactory(storage);
+        Diagnostics = new DiagnosticsPanelViewModel(factory);
+
+        if (IsCentralProfile)
+        {
+            EquipmentCentral = new CentralEquipmentTabViewModel(storage, connectionString);
+            PoliciesCentral = new CentralPoliciesTabViewModel(storage, connectionString);
+
+            Analytics = new AnalyticsPanelViewModel(storage);
+            EventQueue = new EventQueueViewModel(storage);
+            MeasurementsCentral = new CentralMeasurementsTabViewModel(storage, connectionString);
+
+            _ = EquipmentCentral.RefreshAsync();
+            _ = PoliciesCentral.RefreshAsync();
+            _ = Analytics.LoadAsync();
+            _ = MeasurementsCentral.RefreshAsync();
+        }
+        else if (IsPlantProfile)
+        {
+            EquipmentPlant = new PlantEquipmentTabViewModel(connectionString);
+            MeasurementsPlant = new PlantMeasurementsTabViewModel(profile, storage, connectionString);
+            _ = EquipmentPlant.RefreshAsync();
+            _ = MeasurementsPlant.RefreshAsync();
+        }
+    }
+
+    public DatabaseProfile Profile { get; }
+
+    public bool IsCentralProfile => Profile == DatabaseProfile.Central;
+
+    public bool IsPlantProfile => Profile is DatabaseProfile.PlantAnpz or DatabaseProfile.PlantKrnpz;
 
     [ObservableProperty] private string status;
 
-    [ObservableProperty] private CentralDataEntryViewModel? dataEntry;
+    [ObservableProperty] private string title;
+
+    [ObservableProperty] private string connectionDisplay;
+
+    [ObservableProperty] private CentralEquipmentTabViewModel? equipmentCentral;
+
+    [ObservableProperty] private PlantEquipmentTabViewModel? equipmentPlant;
+
+    [ObservableProperty] private CentralPoliciesTabViewModel? policiesCentral;
+
+    [ObservableProperty] private CentralMeasurementsTabViewModel? measurementsCentral;
+
+    [ObservableProperty] private PlantMeasurementsTabViewModel? measurementsPlant;
 
     [ObservableProperty] private AnalyticsPanelViewModel? analytics;
 
-    [ObservableProperty] private MeasurementsPanelViewModel? measurements;
+    [ObservableProperty] private EventQueueViewModel? eventQueue;
 
     [ObservableProperty] private DiagnosticsPanelViewModel? diagnostics;
 
-    [ObservableProperty] private EventQueueViewModel? eventQueue;
+    public IReadOnlyList<ThemeOption> ThemeOptions { get; }
 
-    private async Task OnConnectAsync(string connectionString)
+    [ObservableProperty] private ThemeOption selectedTheme;
+
+    public event Action? RequestChangeConnection;
+
+    [RelayCommand]
+    private void ChangeConnection()
+    {
+        RequestChangeConnection?.Invoke();
+    }
+
+    partial void OnSelectedThemeChanged(ThemeOption value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        ThemeManager.Apply(value.Palette, value.Variant);
+    }
+
+    private static string SimplifyConnectionString(string connectionString)
     {
         try
         {
-            Status = "Подключение...";
-            AppLogger.Info($"[ui] start connect flow");
-            kernelGateway = await Task.Run(() => KernelGateway.Create(connectionString));
-            IsConnected = true;
-            var profileText = kernelGateway.BootstrapInfo?.Profile.ToString() ?? "unknown";
-            Status = $"Подключено ({profileText}) {connectionString}";
-            AppLogger.Info($"[ui] подключение установлено: {connectionString}");
-            var storageFactory = kernelGateway.StorageFactory;
-            var snapshotService = MeasurementSnapshotService.CreateDefault();
-            var dataProvider = new MeasurementDataProvider(kernelGateway.Storage, snapshotService);
-            var ingestionService = new MeasurementIngestionService(storageFactory);
-
-            DataEntry = new CentralDataEntryViewModel(kernelGateway.Storage);
-            Analytics = new AnalyticsPanelViewModel(kernelGateway.Storage);
-            Measurements = new MeasurementsPanelViewModel(dataProvider, snapshotService, ingestionService);
-            Diagnostics = new DiagnosticsPanelViewModel(storageFactory);
-            EventQueue = new EventQueueViewModel(kernelGateway.Storage);
-            AppLogger.Info("[ui] launching analytics load");
-            await Analytics.LoadAsync();
-            AppLogger.Info("[ui] launching measurements load");
-            await Measurements.LoadAsync();
-            AppLogger.Info("[ui] connect flow completed");
+            var builder = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+            var host = string.IsNullOrWhiteSpace(builder.Host) ? "?" : builder.Host;
+            var db = string.IsNullOrWhiteSpace(builder.Database) ? "?" : builder.Database;
+            var user = string.IsNullOrWhiteSpace(builder.Username) ? "?" : builder.Username;
+            var port = builder.Port > 0 ? builder.Port.ToString() : "?";
+            return $"{host}:{port} · {db} · {user}";
         }
-        catch (Exception ex)
+        catch
         {
-            IsConnected = false;
-            Status = $"Ошибка подключения: {ex.Message}";
-            AppLogger.Error($"[ui] connect failed: {ex.Message}");
+            return connectionString;
         }
     }
 
-    private static string? ReadDefaultConnection()
-    {
-        return Environment.GetEnvironmentVariable("OILERP__DB__CONN")
-               ?? Environment.GetEnvironmentVariable("OIL_ERP_PG");
-    }
+    private static ThemeOption[] BuildThemeOptions() =>
+        new[]
+        {
+            new ThemeOption("ultra-black", "Ultra black", ThemePalette.UltraBlack, ThemeVariant.Dark),
+            new ThemeOption("jetbrains-light", "JetBrains light", ThemePalette.JetBrainsLight, ThemeVariant.Light)
+        };
 }

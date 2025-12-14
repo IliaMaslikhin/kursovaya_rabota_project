@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading;
+using Npgsql;
 using OilErp.Bootstrap;
 using OilErp.Core.Contracts;
 using OilErp.Core.Dto;
@@ -19,11 +20,12 @@ public sealed class KernelGateway
 {
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(3);
 
-    private KernelGateway(IStoragePort storage, bool isLive, string statusMessage, BootstrapResult? bootstrapInfo, StorageConfig? storageConfig)
+    private KernelGateway(IStoragePort storage, bool isLive, DatabaseProfile targetProfile, string statusMessage, BootstrapResult? bootstrapInfo, StorageConfig? storageConfig)
     {
         Storage = storage;
         StorageFactory = new StoragePortFactory(storage);
         IsLive = isLive;
+        TargetProfile = targetProfile;
         StatusMessage = statusMessage;
         BootstrapInfo = bootstrapInfo;
         StorageConfig = storageConfig;
@@ -34,16 +36,20 @@ public sealed class KernelGateway
 
     public bool IsLive { get; }
 
+    public DatabaseProfile TargetProfile { get; }
+
     public string StatusMessage { get; }
 
     public BootstrapResult? BootstrapInfo { get; }
 
     public StorageConfig? StorageConfig { get; }
 
-    public static KernelGateway Create(string connectionString)
+    public static KernelGateway Create(string connectionString, DatabaseProfile targetProfile)
     {
-        var config = new StorageConfig(connectionString ?? throw new ArgumentNullException(nameof(connectionString)), 30, ResolveDisableRoutineCacheFlag());
-        AppLogger.Info($"[ui] init kernel gateway with conn='{config.ConnectionString}'");
+        if (connectionString == null) throw new ArgumentNullException(nameof(connectionString));
+        var normalizedConn = NormalizeTargetDatabase(connectionString, targetProfile);
+        var config = new StorageConfig(normalizedConn, 30, ResolveDisableRoutineCacheFlag());
+        AppLogger.Info($"[ui] init kernel gateway with profile={targetProfile} conn='{config.ConnectionString}'");
         BootstrapResult? bootstrap = null;
         var bootstrapper = new DatabaseBootstrapper(config.ConnectionString);
         bootstrap = bootstrapper.EnsureProvisionedAsync().GetAwaiter().GetResult();
@@ -55,17 +61,17 @@ public sealed class KernelGateway
         }
 
         var storage = new StorageAdapter(config);
-        ValidateConnection(storage);
-        var okStatus = BuildSuccessStatus(bootstrap);
+        ValidateConnection(storage, config.ConnectionString, targetProfile);
+        var okStatus = BuildSuccessStatus(bootstrap, targetProfile);
         AppLogger.Info($"[ui] storage ready: {okStatus}");
-        return new KernelGateway(storage, true, okStatus, bootstrap, config);
+        return new KernelGateway(storage, true, targetProfile, okStatus, bootstrap, config);
     }
 
-    private static string BuildSuccessStatus(BootstrapResult bootstrap)
+    private static string BuildSuccessStatus(BootstrapResult bootstrap, DatabaseProfile targetProfile)
     {
         var firstRun = bootstrap.IsFirstRun ? " · первичный запуск" : string.Empty;
         var guideHint = string.IsNullOrWhiteSpace(bootstrap.GuidePath) ? string.Empty : $" · гайд: {bootstrap.GuidePath}";
-        return $"Подключено к StorageAdapter (профиль {bootstrap.Profile}, код {bootstrap.MachineCode}{firstRun}){guideHint}";
+        return $"Подключено ({targetProfile}) · код {bootstrap.MachineCode}{firstRun}{guideHint}";
     }
 
     private static string BuildFailureStatus(BootstrapResult bootstrap)
@@ -75,8 +81,24 @@ public sealed class KernelGateway
         return $"БД не готова: {bootstrap.ErrorMessage ?? "не удалось инициализировать БД"}{codeHint}{guideHint}";
     }
 
-    private static void ValidateConnection(IStoragePort storage)
+    private static void ValidateConnection(IStoragePort storage, string connectionString, DatabaseProfile targetProfile)
     {
+        // baseline connectivity check
+        using (var conn = new NpgsqlConnection(connectionString))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "select 1";
+            var ok = cmd.ExecuteScalar();
+            if (ok is null) throw new InvalidOperationException("DB ping returned NULL.");
+        }
+
+        if (targetProfile != DatabaseProfile.Central)
+        {
+            AppLogger.Info($"[ui] проверка подключения прошла успешно profile={targetProfile}");
+            return;
+        }
+
         var spec = new QuerySpec(
             OperationNames.Central.CalcCr,
             new Dictionary<string, object?>
@@ -95,6 +117,26 @@ public sealed class KernelGateway
         if (rows[0] is not decimal and not double and not float)
             throw new InvalidOperationException($"fn_calc_cr ожидался decimal, но получено {rows[0].GetType().Name}");
         AppLogger.Info("[ui] проверка fn_calc_cr прошла успешно");
+    }
+
+    private static string NormalizeTargetDatabase(string connectionString, DatabaseProfile profile)
+    {
+        try
+        {
+            var b = new NpgsqlConnectionStringBuilder(connectionString);
+            b.Database = profile switch
+            {
+                DatabaseProfile.Central => "central",
+                DatabaseProfile.PlantAnpz => "anpz",
+                DatabaseProfile.PlantKrnpz => "krnpz",
+                _ => b.Database
+            };
+            return b.ConnectionString;
+        }
+        catch
+        {
+            return connectionString;
+        }
     }
 
     private static bool ResolveDisableRoutineCacheFlag()

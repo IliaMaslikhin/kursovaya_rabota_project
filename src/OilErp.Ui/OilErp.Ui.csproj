@@ -14,17 +14,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\..\anpz_measurements.json">
-      <Link>Data\anpz_measurements.json</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\knpz_measurements.json">
-      <Link>Data\knpz_measurements.json</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.8" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.8" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.8" />

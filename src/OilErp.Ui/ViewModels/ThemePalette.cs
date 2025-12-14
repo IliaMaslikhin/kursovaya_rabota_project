@@ -44,25 +44,30 @@ public sealed class ThemePalette
 
     public IBrush CriticalBrush { get; }
 
-    public static ThemePalette Dark { get; } = new ThemePalette(
-        new SolidColorBrush(Color.Parse("#0F172A")),
-        new SolidColorBrush(Color.Parse("#111C34")),
-        new SolidColorBrush(Color.Parse("#111C34")),
-        new SolidColorBrush(Color.Parse("#1F2A40")),
-        new SolidColorBrush(Color.Parse("#F8FAFC")),
-        new SolidColorBrush(Color.Parse("#94A3B8")),
-        new SolidColorBrush(Color.Parse("#38BDF8")),
-        new SolidColorBrush(Color.Parse("#1D4ED8")),
+    public static ThemePalette UltraBlack { get; } = new ThemePalette(
+        new SolidColorBrush(Color.Parse("#000000")),
+        new SolidColorBrush(Color.Parse("#080A0F")),
+        new SolidColorBrush(Color.Parse("#0D1018")),
+        new SolidColorBrush(Color.Parse("#1C1F29")),
+        new SolidColorBrush(Color.Parse("#E9ECF5")),
+        new SolidColorBrush(Color.Parse("#8A8EA0")),
+        new SolidColorBrush(Color.Parse("#22D3EE")),
+        new SolidColorBrush(Color.Parse("#0EA5E9")),
         new SolidColorBrush(Color.Parse("#F87171")));
 
-    public static ThemePalette Light { get; } = new ThemePalette(
-        new SolidColorBrush(Color.Parse("#F8FAFC")),
+    public static ThemePalette JetBrainsLight { get; } = new ThemePalette(
+        new SolidColorBrush(Color.Parse("#F3F4F6")),
         new SolidColorBrush(Color.Parse("#FFFFFF")),
         new SolidColorBrush(Color.Parse("#FFFFFF")),
-        new SolidColorBrush(Color.Parse("#E2E8F0")),
-        new SolidColorBrush(Color.Parse("#0F172A")),
-        new SolidColorBrush(Color.Parse("#475569")),
-        new SolidColorBrush(Color.Parse("#0EA5E9")),
-        new SolidColorBrush(Color.Parse("#2563EB")),
-        new SolidColorBrush(Color.Parse("#DC2626")));
+        new SolidColorBrush(Color.Parse("#D7D9E0")),
+        new SolidColorBrush(Color.Parse("#1F2022")),
+        new SolidColorBrush(Color.Parse("#5C6066")),
+        new SolidColorBrush(Color.Parse("#0E7AFF")),
+        new SolidColorBrush(Color.Parse("#1D4ED8")),
+        new SolidColorBrush(Color.Parse("#D92B2B")));
+
+    // Legacy aliases to keep existing usages valid.
+    public static ThemePalette Dark => UltraBlack;
+
+    public static ThemePalette Light => JetBrainsLight;
 }

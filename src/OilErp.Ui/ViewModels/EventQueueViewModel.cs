@@ -56,7 +56,7 @@ public sealed partial class EventQueueViewModel : ObservableObject
                 var payload = row.PayloadJson;
                 Events.Add(new EventQueueRowViewModel(id, type, plant, created, payload));
             }
-            StatusMessage = $"Непроцессed: {Events.Count}";
+            StatusMessage = $"Необработано: {Events.Count}";
         }
         catch (Exception ex)
         {

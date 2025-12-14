@@ -33,7 +33,7 @@ BEGIN
         (x->>'ts')::timestamptz AS ts,
         NULLIF(x->>'thickness','')::numeric AS thk,
         NULLIF(x->>'note','') AS note
-      FROM jsonb_array_elements(p_points) x
+  FROM jsonb_array_elements(p_points) WITH ORDINALITY AS x(value, ordinality)
     ) s
     WHERE lbl IS NOT NULL
       AND ts IS NOT NULL

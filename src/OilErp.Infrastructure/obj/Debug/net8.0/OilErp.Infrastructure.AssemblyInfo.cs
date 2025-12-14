@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("OilErp.Infrastructure")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e70b762048656495593fd0ae31c9a94fcca285ea")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+fe6fb2ad88dc4885fd76b72cab574c3bb5a8a180")]
 [assembly: System.Reflection.AssemblyProductAttribute("OilErp.Infrastructure")]
 [assembly: System.Reflection.AssemblyTitleAttribute("OilErp.Infrastructure")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

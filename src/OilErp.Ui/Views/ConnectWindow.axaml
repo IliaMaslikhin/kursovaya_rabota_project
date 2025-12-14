@@ -1,0 +1,126 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OilErp.Ui.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        d:DesignWidth="720"
+        d:DesignHeight="520"
+        Width="720"
+        Height="520"
+        WindowStartupLocation="CenterScreen"
+        x:Class="OilErp.Ui.Views.ConnectWindow"
+        x:DataType="vm:ConnectWindowViewModel"
+        Title="OilErp — Подключение">
+
+    <Design.DataContext>
+        <vm:ConnectWindowViewModel/>
+    </Design.DataContext>
+
+    <Grid RowDefinitions="Auto,*"
+          RowSpacing="16"
+          Margin="20">
+        <StackPanel Spacing="6">
+            <TextBlock Text="Подключение к базе данных"
+                       FontSize="24"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource Brush.TextPrimary}"/>
+            <TextBlock Text="Выберите профиль и введите параметры подключения."
+                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+        </StackPanel>
+
+        <Border Grid.Row="1"
+                CornerRadius="14"
+                Padding="18"
+                Background="{DynamicResource Brush.PanelBackground}"
+                BorderBrush="{DynamicResource Brush.Border}"
+                BorderThickness="1">
+            <StackPanel Spacing="14"
+                        DataContext="{Binding ConnectionForm}">
+                <Grid ColumnDefinitions="Auto,*"
+                      ColumnSpacing="12"
+                      RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
+                      RowSpacing="10">
+                    <TextBlock Text="Профиль"
+                               Foreground="{DynamicResource Brush.TextSecondary}"
+                               VerticalAlignment="Center"/>
+                    <ComboBox Grid.Column="1"
+                              ItemsSource="{Binding Profiles}"
+                              SelectedItem="{Binding SelectedProfile}"/>
+
+                    <TextBlock Grid.Row="1"
+                               Text="Host / Port"
+                               Foreground="{DynamicResource Brush.TextSecondary}"
+                               VerticalAlignment="Center"/>
+                    <Grid Grid.Row="1"
+                          Grid.Column="1"
+                          ColumnDefinitions="*,Auto"
+                          ColumnSpacing="10">
+                        <TextBox Text="{Binding Host}" Watermark="localhost"/>
+                        <TextBox Grid.Column="1" Width="90" Text="{Binding Port}" Watermark="5432"/>
+                    </Grid>
+
+                    <TextBlock Grid.Row="2"
+                               Text="Database"
+                               Foreground="{DynamicResource Brush.TextSecondary}"
+                               VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="2"
+                             Grid.Column="1"
+                             Text="{Binding Database}"
+                             IsEnabled="False"/>
+
+                    <TextBlock Grid.Row="3"
+                               Text="User / Password"
+                               Foreground="{DynamicResource Brush.TextSecondary}"
+                               VerticalAlignment="Center"/>
+                    <Grid Grid.Row="3"
+                          Grid.Column="1"
+                          ColumnDefinitions="*,*"
+                          ColumnSpacing="10">
+                        <TextBox Text="{Binding Username}" Watermark="postgres"/>
+                        <TextBox Grid.Column="1" Text="{Binding Password}" PasswordChar="•" Watermark="password"/>
+                    </Grid>
+
+                    <TextBlock Grid.Row="4"
+                               Text="Timeout, sec"
+                               Foreground="{DynamicResource Brush.TextSecondary}"
+                               VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="4"
+                             Grid.Column="1"
+                             Width="120"
+                             Text="{Binding TimeoutSec}"/>
+
+                    <TextBlock Grid.Row="5"
+                               Text="Advanced"
+                               Foreground="{DynamicResource Brush.TextSecondary}"
+                               VerticalAlignment="Center"/>
+                    <StackPanel Grid.Row="5"
+                                Grid.Column="1"
+                                Spacing="8">
+                        <CheckBox Content="Использовать готовую строку подключения"
+                                  IsChecked="{Binding UseCustomString}"
+                                  Foreground="{DynamicResource Brush.TextPrimary}"/>
+                        <TextBox Text="{Binding ConnectionString}"
+                                 Watermark="Host=...;Username=...;Password=...;Database=..."
+                                 IsEnabled="{Binding UseCustomString}"/>
+                    </StackPanel>
+                </Grid>
+
+                <StackPanel Orientation="Horizontal"
+                            Spacing="10"
+                            HorizontalAlignment="Right">
+                    <Button Content="Проверить"
+                            Command="{Binding TestCommand}"
+                            IsEnabled="{Binding IsNotBusy}"/>
+                    <Button Content="Войти"
+                            Command="{Binding ConnectCommand}"
+                            IsEnabled="{Binding IsNotBusy}"/>
+                </StackPanel>
+
+                <TextBlock Text="{Binding StatusMessage}"
+                           Foreground="{DynamicResource Brush.TextSecondary}"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

@@ -74,8 +74,6 @@
 /Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Ui/obj/Debug/net8.0/OilErp.Ui.pdb
 /Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Ui/obj/Debug/net8.0/OilErp.Ui.genruntimeconfig.cache
 /Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Ui/obj/Debug/net8.0/ref/OilErp.Ui.dll
-/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Ui/bin/Debug/net8.0/Data/anpz_measurements.json
-/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Ui/bin/Debug/net8.0/Data/knpz_measurements.json
 /Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Ui/bin/Debug/net8.0/OilErp.Core.dll
 /Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Ui/bin/Debug/net8.0/OilErp.Core.pdb
 /Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Ui/bin/Debug/net8.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll

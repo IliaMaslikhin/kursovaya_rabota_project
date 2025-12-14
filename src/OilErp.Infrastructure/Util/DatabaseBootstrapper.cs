@@ -40,7 +40,7 @@ public sealed class DatabaseBootstrapper
     {
         var isFirstRun = FirstRunTracker.IsFirstRun(out var machineCode);
         AppLogger.Info($"[bootstrap] старт проверки профиля (firstRun={isFirstRun}, machine={machineCode})");
-        var centralInspector = new DatabaseInventoryInspector(connectionString);
+        var centralInspector = new DatabaseInventoryInspector(WithDatabase(connectionString, "central"));
         try
         {
             await EnsureDatabasesAsync();
@@ -86,7 +86,7 @@ public sealed class DatabaseBootstrapper
     {
         var builder = new NpgsqlConnectionStringBuilder(connectionString);
         var targetDb = string.IsNullOrWhiteSpace(builder.Database) ? "central" : builder.Database;
-        var dbs = new[] { targetDb, "anpz", "krnpz" };
+        var dbs = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "central", "anpz", "krnpz", targetDb };
 
         builder.Database = "postgres";
         var adminConnString = builder.ConnectionString;
