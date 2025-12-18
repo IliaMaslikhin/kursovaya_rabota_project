@@ -15,8 +15,9 @@
         <SolidColorBrush x:Key="Brush.Border" Color="#1C1F29"/>
         <SolidColorBrush x:Key="Brush.TextPrimary" Color="#E9ECF5"/>
         <SolidColorBrush x:Key="Brush.TextSecondary" Color="#8A8EA0"/>
-        <SolidColorBrush x:Key="Brush.Accent" Color="#22D3EE"/>
-        <SolidColorBrush x:Key="Brush.AccentMuted" Color="#0EA5E9"/>
+        <SolidColorBrush x:Key="Brush.Accent" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="Brush.AccentText" Color="#000000"/>
+        <SolidColorBrush x:Key="Brush.AccentMuted" Color="#22FFFFFF"/>
         <SolidColorBrush x:Key="Brush.Critical" Color="#F87171"/>
     </Application.Resources>
 
@@ -46,6 +47,21 @@
             <Setter Property="Background" Value="{DynamicResource Brush.PanelBackground}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}"/>
             <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
+        </Style>
+        <Style Selector="Button:disabled">
+            <Setter Property="Opacity" Value="0.55"/>
+        </Style>
+
+        <Style Selector="Button.primary">
+            <Setter Property="Background" Value="{DynamicResource Brush.Accent}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Brush.AccentText}"/>
+        </Style>
+        <Style Selector="Button.primary:pointerover">
+            <Setter Property="Opacity" Value="0.92"/>
+        </Style>
+        <Style Selector="Button.primary:pressed">
+            <Setter Property="Opacity" Value="0.82"/>
         </Style>
 
         <Style Selector="TextBox">

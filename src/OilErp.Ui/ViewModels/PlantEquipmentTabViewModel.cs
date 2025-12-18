@@ -1,9 +1,11 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Npgsql;
+using NpgsqlTypes;
 using OilErp.Bootstrap;
 using OilErp.Ui.Services;
 using OilErp.Ui.Views;
@@ -13,17 +15,31 @@ namespace OilErp.Ui.ViewModels;
 public sealed partial class PlantEquipmentTabViewModel : ObservableObject
 {
     private readonly string connectionString;
+    private static readonly string[] StatusOptions = { "OK", "Warning", "Critical", "Unknown" };
+    private readonly DispatcherTimer filterDebounceTimer;
+    private bool filterRefreshPending;
 
     public PlantEquipmentTabViewModel(string connectionString)
     {
         this.connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
         Items = new ObservableCollection<PlantEquipmentItemViewModel>();
         statusMessage = "Загрузите список оборудования.";
+
+        filterDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
+        filterDebounceTimer.Tick += async (_, _) =>
+        {
+            filterDebounceTimer.Stop();
+            if (IsBusy || !filterRefreshPending) return;
+            filterRefreshPending = false;
+            await RefreshAsync();
+        };
     }
 
     public ObservableCollection<PlantEquipmentItemViewModel> Items { get; }
 
     [ObservableProperty] private PlantEquipmentItemViewModel? selectedItem;
+
+    [ObservableProperty] private string filterText = string.Empty;
 
     [ObservableProperty] private bool isBusy;
     [ObservableProperty] private string statusMessage;
@@ -33,13 +49,19 @@ public sealed partial class PlantEquipmentTabViewModel : ObservableObject
         AddCommand.NotifyCanExecuteChanged();
         EditCommand.NotifyCanExecuteChanged();
         DeleteCommand.NotifyCanExecuteChanged();
+
+        if (!value && filterRefreshPending)
+        {
+            filterDebounceTimer.Stop();
+            filterDebounceTimer.Start();
+        }
     }
 
     partial void OnSelectedItemChanged(PlantEquipmentItemViewModel? value)
     {
         if (value is null)
         {
-            StatusMessage = "Выберите запись или нажмите «+» для добавления.";
+            StatusMessage = "Выберите запись или нажмите «Добавить» для добавления.";
         }
         else
         {
@@ -48,6 +70,13 @@ public sealed partial class PlantEquipmentTabViewModel : ObservableObject
 
         EditCommand.NotifyCanExecuteChanged();
         DeleteCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnFilterTextChanged(string value)
+    {
+        filterRefreshPending = true;
+        filterDebounceTimer.Stop();
+        filterDebounceTimer.Start();
     }
 
     private bool CanOpenDialog() => !IsBusy;
@@ -79,9 +108,14 @@ public sealed partial class PlantEquipmentTabViewModel : ObservableObject
             cmd.CommandText = """
                 select asset_code, location, status, created_at
                 from public.assets_local
+                where @q is null
+                   or asset_code ilike @q
+                   or coalesce(location,'') ilike @q
+                   or coalesce(status,'') ilike @q
                 order by created_at desc
                 limit 500
                 """;
+            cmd.Parameters.Add("q", NpgsqlDbType.Text).Value = string.IsNullOrWhiteSpace(FilterText) ? DBNull.Value : $"%{FilterText.Trim()}%";
             await using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
@@ -111,6 +145,13 @@ public sealed partial class PlantEquipmentTabViewModel : ObservableObject
         }
     }
 
+    [RelayCommand]
+    private async Task ClearFilterAsync()
+    {
+        FilterText = string.Empty;
+        await RefreshAsync();
+    }
+
     [RelayCommand(CanExecute = nameof(CanOpenDialog))]
     public async Task AddAsync()
     {
@@ -124,7 +165,8 @@ public sealed partial class PlantEquipmentTabViewModel : ObservableObject
                 "Локация",
                 null,
                 "Статус",
-                null);
+                "OK",
+                field2Options: StatusOptions);
 
             var dialog = new EquipmentEditWindow { DataContext = vm };
             var result = await UiDialogHost.ShowDialogAsync<EquipmentEditResult?>(dialog);
@@ -154,7 +196,8 @@ public sealed partial class PlantEquipmentTabViewModel : ObservableObject
                 "Локация",
                 selected.Location,
                 "Статус",
-                selected.Status);
+                selected.Status,
+                field2Options: StatusOptions);
 
             var dialog = new EquipmentEditWindow { DataContext = vm };
             var result = await UiDialogHost.ShowDialogAsync<EquipmentEditResult?>(dialog);
@@ -218,6 +261,8 @@ public sealed partial class PlantEquipmentTabViewModel : ObservableObject
             return;
         }
 
+        var normalizedStatus = string.IsNullOrWhiteSpace(status) ? "OK" : status.Trim();
+
         try
         {
             IsBusy = true;
@@ -242,7 +287,7 @@ public sealed partial class PlantEquipmentTabViewModel : ObservableObject
                 """;
             cmd.Parameters.AddWithValue("@code", code.Trim());
             cmd.Parameters.AddWithValue("@location", (object?)location?.Trim() ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@status", (object?)status?.Trim() ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@status", normalizedStatus);
 
             await cmd.ExecuteNonQueryAsync();
             StatusMessage = "Сохранено. Обновляем список...";

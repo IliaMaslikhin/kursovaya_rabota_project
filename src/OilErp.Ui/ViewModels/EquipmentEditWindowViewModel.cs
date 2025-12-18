@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -14,7 +15,8 @@ public sealed partial class EquipmentEditWindowViewModel : ObservableObject
         string field1Label,
         string? field1,
         string field2Label,
-        string? field2)
+        string? field2,
+        IReadOnlyList<string>? field2Options = null)
     {
         Title = title;
         CodeLabel = codeLabel;
@@ -24,6 +26,7 @@ public sealed partial class EquipmentEditWindowViewModel : ObservableObject
         Field1 = field1 ?? string.Empty;
         Field2Label = field2Label;
         Field2 = field2 ?? string.Empty;
+        Field2Options = field2Options ?? Array.Empty<string>();
         statusMessage = string.Empty;
     }
 
@@ -42,6 +45,14 @@ public sealed partial class EquipmentEditWindowViewModel : ObservableObject
     public string Field2Label { get; }
 
     [ObservableProperty] private string field2;
+
+    public IReadOnlyList<string> Field2Options { get; }
+
+    public bool HasField2Options => Field2Options.Count > 0;
+
+    public bool ShowPlantMetaHint =>
+        string.Equals(Field1Label, "Локация", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(Field2Label, "Статус", StringComparison.OrdinalIgnoreCase);
 
     [ObservableProperty] private string statusMessage;
 
@@ -79,4 +90,3 @@ public sealed partial class EquipmentEditWindowViewModel : ObservableObject
 }
 
 public sealed record EquipmentEditResult(string Code, string? Field1, string? Field2);
-

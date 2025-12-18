@@ -198,25 +198,18 @@ public sealed class DatabaseInventoryInspector
                 new("function", "public.fn_calc_cr", "prev_thk numeric, prev_date timestamp with time zone, last_thk numeric, last_date timestamp with time zone"),
                 new("function", "public.fn_asset_upsert", "p_asset_code text, p_name text, p_type text, p_plant_code text"),
                 new("function", "public.fn_policy_upsert", "p_name text, p_low numeric, p_med numeric, p_high numeric"),
-                new("function", "public.fn_events_enqueue", "p_event_type text, p_source_plant text, p_payload jsonb"),
-                new("function", "public.fn_events_peek", "p_limit integer"),
-                new("function", "public.fn_ingest_events", "p_limit integer"),
-                new("function", "public.fn_events_requeue", "p_ids bigint[]"),
-                new("function", "public.fn_events_cleanup", "p_older_than interval"),
                 new("function", "public.fn_eval_risk", "p_asset_code text, p_policy_name text"),
                 new("function", "public.fn_asset_summary_json", "p_asset_code text, p_policy_name text"),
                 new("function", "public.fn_top_assets_by_cr", "p_limit integer"),
                 new("function", "public.fn_plant_cr_stats", "p_plant text, p_from timestamp with time zone, p_to timestamp with time zone"),
-                new("procedure", "public.sp_ingest_events", "p_limit integer, OUT processed integer"),
-                new("procedure", "public.sp_events_enqueue", "p_event_type text, p_source_plant text, p_payload jsonb, OUT p_id bigint"),
-                new("procedure", "public.sp_events_requeue", "p_ids bigint[], OUT n integer"),
-                new("procedure", "public.sp_events_cleanup", "p_older_than interval, OUT n integer"),
+                new("function", "public.trg_measurement_batches_bi_fn"),
+                new("trigger", "public.trg_measurement_batches_bi"),
                 new("procedure", "public.sp_policy_upsert", "p_name text, p_low numeric, p_med numeric, p_high numeric, OUT p_id bigint"),
                 new("procedure", "public.sp_asset_upsert", "p_asset_code text, p_name text, p_type text, p_plant_code text, OUT p_id bigint"),
                 new("table", "public.assets_global"),
                 new("table", "public.risk_policies"),
                 new("table", "public.analytics_cr"),
-                new("table", "public.events_inbox")
+                new("table", "public.measurement_batches")
             },
             DatabaseProfile.PlantAnpz or DatabaseProfile.PlantKrnpz => new List<DbObjectRequirement>
             {
@@ -228,7 +221,7 @@ public sealed class DatabaseInventoryInspector
                 new("table", "public.measurement_points"),
                 new("table", "public.measurements"),
                 new("table", "public.local_events"),
-                new("table", "central_ft.events_inbox")
+                new("table", "central_ft.measurement_batches")
             },
             _ => new List<DbObjectRequirement>()
         };
@@ -293,17 +286,27 @@ public sealed class DatabaseInventoryInspector
 
     private static async Task EnsurePlantFdwMappingAsync(NpgsqlConnection conn, NpgsqlConnectionStringBuilder currentDb)
     {
-        var host = currentDb.Host;
+        var centralDb = TryResolveCentralConnectionStringBuilder();
+
+        var hostSource = centralDb ?? currentDb;
+        var host = hostSource.Host;
         if (string.IsNullOrWhiteSpace(host)) host = "localhost";
         var primaryHost = host.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault()
                           ?? "localhost";
-        var port = currentDb.Port > 0 ? currentDb.Port.ToString() : "5432";
-        const string centralDbName = "central";
-        var user = string.IsNullOrWhiteSpace(currentDb.Username) ? "postgres" : currentDb.Username;
-        var password = currentDb.Password;
+        var portValue = hostSource.Port > 0 ? hostSource.Port.ToString() : "5432";
+
+        var centralDbName = centralDb?.Database;
+        if (string.IsNullOrWhiteSpace(centralDbName))
+        {
+            centralDbName = GuessCentralDatabaseName(currentDb.Database);
+        }
+
+        var user = string.IsNullOrWhiteSpace(centralDb?.Username) ? currentDb.Username : centralDb!.Username;
+        if (string.IsNullOrWhiteSpace(user)) user = "postgres";
+        var password = !string.IsNullOrWhiteSpace(centralDb?.Password) ? centralDb!.Password : currentDb.Password;
 
         var alterServerSql =
-            $"ALTER SERVER central_srv OPTIONS (SET host {PgLiteral(primaryHost)}, SET dbname {PgLiteral(centralDbName)}, SET port {PgLiteral(port)});";
+            $"ALTER SERVER central_srv OPTIONS (SET host {PgLiteral(primaryHost)}, SET dbname {PgLiteral(centralDbName)}, SET port {PgLiteral(portValue)});";
         await using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = alterServerSql;
@@ -370,6 +373,45 @@ public sealed class DatabaseInventoryInspector
                 await cmd.ExecuteNonQueryAsync();
             }
         }
+    }
+
+    private static NpgsqlConnectionStringBuilder? TryResolveCentralConnectionStringBuilder()
+    {
+        // Важно: заводская FDW должна указывать на ту же central БД, что используется в приложении.
+        // Берём строку central из окружения (OILERP__DB__CONN / OIL_ERP_PG).
+        var centralConn =
+            Environment.GetEnvironmentVariable("OILERP__DB__CONN")
+            ?? Environment.GetEnvironmentVariable("OIL_ERP_PG");
+
+        if (string.IsNullOrWhiteSpace(centralConn))
+        {
+            return null;
+        }
+
+        try
+        {
+            return new NpgsqlConnectionStringBuilder(centralConn);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string GuessCentralDatabaseName(string? currentDatabase)
+    {
+        if (string.IsNullOrWhiteSpace(currentDatabase))
+        {
+            return "central";
+        }
+
+        var value = currentDatabase.Trim();
+
+        // Пытаемся сохранить общий префикс/суффикс, меняя только код профиля.
+        value = value.Replace("anpz", "central", StringComparison.OrdinalIgnoreCase);
+        value = value.Replace("knpz", "central", StringComparison.OrdinalIgnoreCase);
+        value = value.Replace("krnpz", "central", StringComparison.OrdinalIgnoreCase);
+        return value;
     }
 
     private static string PgLiteral(string value)

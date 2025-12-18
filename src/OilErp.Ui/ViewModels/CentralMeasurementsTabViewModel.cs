@@ -3,15 +3,13 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
-using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Npgsql;
+using NpgsqlTypes;
 using OilErp.Bootstrap;
-using OilErp.Core.Contracts;
-using OilErp.Core.Services.Central;
 using OilErp.Ui.Services;
 using OilErp.Ui.Views;
 
@@ -21,40 +19,117 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
 {
     private const int MaxColumns = 12;
     private const string CentralPlantCode = "CENTRAL";
-
-    private readonly IStoragePort storage;
-    private readonly string connectionString;
-
-    public CentralMeasurementsTabViewModel(IStoragePort storage, string connectionString)
+    private static readonly EquipmentSortOption[] EquipmentSortOptionsSource =
     {
-        this.storage = storage ?? throw new ArgumentNullException(nameof(storage));
+        new EquipmentSortOption("code", "Код (A→Z)", "asset_code"),
+        new EquipmentSortOption("plant", "Завод (A→Z)", "plant_code nulls last, asset_code"),
+        new EquipmentSortOption("last_measured_desc", "Последний замер (новые)", "last_ts desc nulls last, asset_code"),
+        new EquipmentSortOption("last_measured_asc", "Последний замер (старые)", "last_ts asc nulls last, asset_code")
+    };
+
+    private static readonly EquipmentGroupOption[] EquipmentGroupOptionsSource =
+    {
+        new EquipmentGroupOption("none", "Без группировки"),
+        new EquipmentGroupOption("plant", "Группировать: завод"),
+        new EquipmentGroupOption("type", "Группировать: тип"),
+        new EquipmentGroupOption("last_day", "Группировать: дата (последний замер)")
+    };
+
+    private readonly string connectionString;
+    private bool? hasExtendedColumns;
+    private readonly DispatcherTimer filterDebounceTimer;
+    private bool filterRefreshPending;
+
+    public CentralMeasurementsTabViewModel(string connectionString)
+    {
         this.connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
         Columns = new ObservableCollection<CentralMeasurementColumnViewModel>();
         Rows = new ObservableCollection<CentralMeasurementEquipmentRowViewModel>();
+        DisplayRows = new ObservableCollection<object>();
         statusMessage = "Нажмите «Обновить» для загрузки таблицы.";
+        EquipmentSortOptions = EquipmentSortOptionsSource;
+        selectedEquipmentSort = EquipmentSortOptions[0];
+        EquipmentGroupOptions = EquipmentGroupOptionsSource;
+        selectedEquipmentGroup = EquipmentGroupOptions[0];
+
+        filterDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
+        filterDebounceTimer.Tick += async (_, _) =>
+        {
+            filterDebounceTimer.Stop();
+            if (IsBusy || !filterRefreshPending) return;
+            filterRefreshPending = false;
+            await RefreshAsync();
+        };
     }
 
     public ObservableCollection<CentralMeasurementColumnViewModel> Columns { get; }
 
     public ObservableCollection<CentralMeasurementEquipmentRowViewModel> Rows { get; }
 
+    public ObservableCollection<object> DisplayRows { get; }
+
+    public IReadOnlyList<EquipmentSortOption> EquipmentSortOptions { get; }
+
+    public IReadOnlyList<EquipmentGroupOption> EquipmentGroupOptions { get; }
+
+    [ObservableProperty] private object? selectedDisplayRow;
+
     [ObservableProperty] private CentralMeasurementEquipmentRowViewModel? selectedRow;
+
+    [ObservableProperty] private string filterText = string.Empty;
+
+    [ObservableProperty] private EquipmentSortOption selectedEquipmentSort;
+
+    [ObservableProperty] private EquipmentGroupOption selectedEquipmentGroup;
 
     [ObservableProperty] private bool isBusy;
 
     [ObservableProperty] private string statusMessage;
 
+    partial void OnSelectedDisplayRowChanged(object? value)
+    {
+        SelectedRow = value as CentralMeasurementEquipmentRowViewModel;
+    }
+
     partial void OnIsBusyChanged(bool value)
     {
         AddMeasurementCommand.NotifyCanExecuteChanged();
+        ShowHistoryCommand.NotifyCanExecuteChanged();
+        OpenTransferCommand.NotifyCanExecuteChanged();
+
+        if (!value && filterRefreshPending)
+        {
+            filterDebounceTimer.Stop();
+            filterDebounceTimer.Start();
+        }
     }
 
     partial void OnSelectedRowChanged(CentralMeasurementEquipmentRowViewModel? value)
     {
         AddMeasurementCommand.NotifyCanExecuteChanged();
+        ShowHistoryCommand.NotifyCanExecuteChanged();
     }
 
-    private bool CanAddMeasurement() => !IsBusy && SelectedRow is not null;
+    partial void OnFilterTextChanged(string value)
+    {
+        filterRefreshPending = true;
+        filterDebounceTimer.Stop();
+        filterDebounceTimer.Start();
+    }
+
+    partial void OnSelectedEquipmentSortChanged(EquipmentSortOption value)
+    {
+        RebuildDisplayRows();
+    }
+
+    partial void OnSelectedEquipmentGroupChanged(EquipmentGroupOption value)
+    {
+        RebuildDisplayRows();
+    }
+
+    private bool CanAddMeasurement() => !IsBusy && SelectedRow is not null && IsEditableInCentral(SelectedRow);
+    private bool CanShowHistory() => !IsBusy && SelectedRow is not null;
+    private bool CanOpenTransfer() => !IsBusy;
 
     [RelayCommand]
     public async Task RefreshAsync()
@@ -63,10 +138,13 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
         {
             IsBusy = true;
             AddMeasurementCommand.NotifyCanExecuteChanged();
-            StatusMessage = "Загрузка оборудования и замеров (central)...";
+            StatusMessage = "Загрузка оборудования и замеров (central, все заводы)...";
 
+            SelectedDisplayRow = null;
+            SelectedRow = null;
             Rows.Clear();
             Columns.Clear();
+            DisplayRows.Clear();
 
             var rowsByCode = await LoadEquipmentAsync();
             await LoadCentralEventsAsync(rowsByCode);
@@ -76,6 +154,7 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
                 row.RebuildCells(Columns);
             }
 
+            RebuildDisplayRows();
             StatusMessage = $"Оборудование: {Rows.Count}, столбцов замеров: {Columns.Count}.";
         }
         catch (Exception ex)
@@ -99,11 +178,16 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
             StatusMessage = "Выберите оборудование, чтобы добавить замер.";
             return;
         }
+        if (!IsEditableInCentral(selected))
+        {
+            var plant = string.IsNullOrWhiteSpace(selected.PlantCode) ? "—" : selected.PlantCode;
+            StatusMessage = $"Оборудование получено из {plant}. Добавление замеров доступно только на заводе.";
+            return;
+        }
 
         var assetCode = selected.Code.Trim();
-        var baseTimestampUtc = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
 
-        var vm = new CentralMeasurementEditWindowViewModel($"Добавить замер (central)", assetCode);
+        var vm = new CentralMeasurementEditWindowViewModel("Добавить замер", assetCode);
         var dialog = new CentralMeasurementEditWindow { DataContext = vm };
         var result = await UiDialogHost.ShowDialogAsync<CentralMeasurementEditResult?>(dialog);
         if (result is null) return;
@@ -123,22 +207,26 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
                 return;
             }
 
-            var timestampUtc = baseTimestampUtc;
+            var selectedLocalDate = result.DateLocal.Date;
+            if (prevDate is not null)
+            {
+                var lastLocalDate = prevDate.Value.ToLocalTime().Date;
+                if (selectedLocalDate < lastLocalDate)
+                {
+                    StatusMessage = $"Дата не может быть раньше последней ({lastLocalDate:dd.MM.yyyy}).";
+                    return;
+                }
+            }
+
+            var localMidnight = DateTime.SpecifyKind(selectedLocalDate, DateTimeKind.Local);
+            var timestampUtc = localMidnight.ToUniversalTime();
             if (prevDate is not null && timestampUtc <= prevDate.Value)
             {
                 timestampUtc = prevDate.Value.AddSeconds(1);
             }
 
-            var payload = BuildPayload(assetCode, prevThk, prevDate, (decimal)Math.Round(result.Thickness, 3), timestampUtc);
-
-            var enqueue = new FnEventsEnqueueService(storage);
-            var ingest = new FnIngestEventsService(storage);
-
-            StatusMessage = "Добавляем в очередь событий...";
-            await enqueue.fn_events_enqueueAsync("HC_MEASUREMENT_BATCH", CentralPlantCode, payload, CancellationToken.None);
-
-            StatusMessage = "Запускаем ingest...";
-            await ingest.fn_ingest_eventsAsync(5000, CancellationToken.None);
+            var lastThk = (decimal)Math.Round(result.Thickness, 3);
+            await InsertBatchAsync(assetCode, prevThk, prevDate, lastThk, timestampUtc, result.Label, result.Note);
 
             await RefreshAsync();
             StatusMessage = "Замер добавлен.";
@@ -155,6 +243,35 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
         }
     }
 
+    [RelayCommand(CanExecute = nameof(CanShowHistory))]
+    public async Task ShowHistoryAsync()
+    {
+        var selected = SelectedRow;
+        if (selected is null)
+        {
+            StatusMessage = "Выберите оборудование, чтобы открыть историю.";
+            return;
+        }
+
+        var assetCode = selected.Code.Trim();
+        var vm = new CentralMeasurementHistoryWindowViewModel(assetCode, connectionString);
+        var dialog = new CentralMeasurementHistoryWindow { DataContext = vm };
+        _ = vm.RefreshAsync();
+        await UiDialogHost.ShowDialogAsync<bool?>(dialog);
+
+        await RefreshAsync();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanOpenTransfer))]
+    public async Task OpenTransferAsync()
+    {
+        var vm = new CentralMeasurementsTransferWindowViewModel(connectionString);
+        var dialog = new CentralMeasurementsTransferWindow { DataContext = vm };
+        await UiDialogHost.ShowDialogAsync<bool?>(dialog);
+
+        await RefreshAsync();
+    }
+
     private async Task<Dictionary<string, CentralMeasurementEquipmentRowViewModel>> LoadEquipmentAsync()
     {
         var map = new Dictionary<string, CentralMeasurementEquipmentRowViewModel>(StringComparer.OrdinalIgnoreCase);
@@ -163,12 +280,30 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
         await conn.OpenAsync();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            select asset_code, name, type
-            from public.assets_global
-            where plant_code is null or upper(plant_code) = 'CENTRAL'
-            order by created_at desc
-            limit 300
+            with last_batch as (
+              select distinct on (asset_code)
+                asset_code,
+                source_plant,
+                last_date
+              from public.measurement_batches
+              order by asset_code, last_date desc, id desc
+            )
+            select
+              coalesce(ag.asset_code, lb.asset_code) as asset_code,
+              ag.name,
+              ag.type,
+              coalesce(ag.plant_code, lb.source_plant) as plant_code
+            from public.assets_global ag
+            full join last_batch lb on lb.asset_code = ag.asset_code
+            where @q is null
+               or coalesce(ag.asset_code, lb.asset_code) ilike @q
+               or coalesce(ag.name,'') ilike @q
+               or coalesce(ag.type,'') ilike @q
+               or coalesce(ag.plant_code, lb.source_plant, '') ilike @q
+            order by coalesce(ag.asset_code, lb.asset_code)
+            limit 500
             """;
+        cmd.Parameters.Add("q", NpgsqlDbType.Text).Value = string.IsNullOrWhiteSpace(FilterText) ? DBNull.Value : $"%{FilterText.Trim()}%";
 
         await using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
@@ -176,13 +311,21 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
             var code = reader.GetString(0);
             var name = reader.IsDBNull(1) ? null : reader.GetString(1);
             var type = reader.IsDBNull(2) ? null : reader.GetString(2);
+            var plant = reader.IsDBNull(3) ? null : reader.GetString(3);
 
-            var row = new CentralMeasurementEquipmentRowViewModel(code, name, type);
+            var row = new CentralMeasurementEquipmentRowViewModel(code, name, type, plant);
             Rows.Add(row);
             map[code] = row;
         }
 
         return map;
+    }
+
+    [RelayCommand]
+    private async Task ClearFilterAsync()
+    {
+        FilterText = string.Empty;
+        await RefreshAsync();
     }
 
     private async Task LoadCentralEventsAsync(Dictionary<string, CentralMeasurementEquipmentRowViewModel> rowsByCode)
@@ -195,16 +338,11 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             select
-              payload_json->>'asset_code' as asset_code,
-              (payload_json->>'last_date')::timestamptz as ts,
-              (payload_json->>'last_thk')::numeric as thickness
-            from public.events_inbox
-            where event_type = 'HC_MEASUREMENT_BATCH'
-              and upper(coalesce(source_plant,'')) = 'CENTRAL'
-              and payload_json ? 'asset_code'
-              and payload_json ? 'last_date'
-              and payload_json ? 'last_thk'
-            order by (payload_json->>'last_date')::timestamptz desc, id desc
+              asset_code,
+              last_date as ts,
+              last_thk as thickness
+            from public.measurement_batches
+            order by last_date desc, id desc
             limit 1500
             """;
 
@@ -216,7 +354,7 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
 
             var dt = reader.GetFieldValue<DateTime>(1);
             if (dt.Kind == DateTimeKind.Unspecified) dt = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
-            var ts = new DateTimeOffset(dt);
+            var ts = NormalizeToLocalDay(new DateTimeOffset(dt));
             var thk = reader.GetFieldValue<decimal>(2);
 
             if (!columnsSet.Contains(ts))
@@ -236,10 +374,181 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
         }
     }
 
+    private void RebuildDisplayRows()
+    {
+        DisplayRows.Clear();
+        if (Rows.Count == 0) return;
+
+        var orderedRows = GetSortedRows();
+        if (string.Equals(SelectedEquipmentGroup.Code, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var row in orderedRows)
+            {
+                DisplayRows.Add(row);
+            }
+
+            return;
+        }
+
+        if (string.Equals(SelectedEquipmentGroup.Code, "plant", StringComparison.OrdinalIgnoreCase))
+        {
+            var groups = orderedRows
+                .GroupBy(r => string.IsNullOrWhiteSpace(r.PlantCode) ? "—" : r.PlantCode.Trim(), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var g in groups)
+            {
+                DisplayRows.Add(new CentralMeasurementsGroupHeaderViewModel($"Завод: {g.Key}", g.Count()));
+                foreach (var row in g)
+                {
+                    DisplayRows.Add(row);
+                }
+            }
+
+            return;
+        }
+
+        if (string.Equals(SelectedEquipmentGroup.Code, "type", StringComparison.OrdinalIgnoreCase))
+        {
+            var groups = orderedRows
+                .GroupBy(r => string.IsNullOrWhiteSpace(r.Type) ? "—" : r.Type.Trim(), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var g in groups)
+            {
+                DisplayRows.Add(new CentralMeasurementsGroupHeaderViewModel($"Тип: {g.Key}", g.Count()));
+                foreach (var row in g)
+                {
+                    DisplayRows.Add(row);
+                }
+            }
+
+            return;
+        }
+
+        if (string.Equals(SelectedEquipmentGroup.Code, "last_day", StringComparison.OrdinalIgnoreCase))
+        {
+            var withMeasurements = orderedRows
+                .Where(r => r.LastMeasurementUtc is not null)
+                .GroupBy(r => r.LastMeasurementUtc!.Value.ToLocalTime().Date)
+                .OrderByDescending(g => g.Key);
+
+            foreach (var g in withMeasurements)
+            {
+                DisplayRows.Add(new CentralMeasurementsGroupHeaderViewModel(g.Key.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture), g.Count()));
+                foreach (var row in g)
+                {
+                    DisplayRows.Add(row);
+                }
+            }
+
+            var without = orderedRows.Where(r => r.LastMeasurementUtc is null).ToList();
+            if (without.Count > 0)
+            {
+                DisplayRows.Add(new CentralMeasurementsGroupHeaderViewModel("Нет замеров", without.Count));
+                foreach (var row in without)
+                {
+                    DisplayRows.Add(row);
+                }
+            }
+        }
+    }
+
+    private IReadOnlyList<CentralMeasurementEquipmentRowViewModel> GetSortedRows()
+    {
+        var comparer = StringComparer.OrdinalIgnoreCase;
+
+        return SelectedEquipmentSort.Code switch
+        {
+            "code" => Rows.OrderBy(r => r.Code, comparer).ToList(),
+            "plant" => Rows
+                .OrderBy(r => string.IsNullOrWhiteSpace(r.PlantCode))
+                .ThenBy(r => r.PlantCode, comparer)
+                .ThenBy(r => r.Code, comparer)
+                .ToList(),
+            "last_measured_desc" => Rows
+                .OrderByDescending(r => r.LastMeasurementUtc ?? DateTimeOffset.MinValue)
+                .ThenBy(r => r.Code, comparer)
+                .ToList(),
+            "last_measured_asc" => Rows
+                .OrderBy(r => r.LastMeasurementUtc ?? DateTimeOffset.MaxValue)
+                .ThenBy(r => r.Code, comparer)
+                .ToList(),
+            _ => Rows.ToList()
+        };
+    }
+
     private static string FormatColumn(DateTimeOffset ts)
     {
         var local = ts.ToLocalTime();
-        return local.ToString("dd.MM HH:mm", CultureInfo.InvariantCulture);
+        return local.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
+    }
+
+    private static DateTimeOffset NormalizeToLocalDay(DateTimeOffset ts)
+    {
+        var local = ts.ToLocalTime().Date;
+        return new DateTimeOffset(local);
+    }
+
+    private async Task InsertBatchAsync(
+        string assetCode,
+        decimal? prevThk,
+        DateTime? prevDateUtc,
+        decimal lastThk,
+        DateTime lastDateUtc,
+        string label,
+        string? note)
+    {
+        StatusMessage = "Сохраняем замер (central)...";
+        await using var conn = new NpgsqlConnection(connectionString);
+        await conn.OpenAsync();
+        var hasExtras = await HasExtendedColumnsAsync(conn);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = hasExtras
+            ? """
+              insert into public.measurement_batches(
+                source_plant, asset_code, prev_thk, prev_date, last_thk, last_date, last_label, last_note
+              )
+              values (@plant, @asset, @prev_thk, @prev_date, @last_thk, @last_date, @label, @note);
+              """
+            : """
+              insert into public.measurement_batches(
+                source_plant, asset_code, prev_thk, prev_date, last_thk, last_date
+              )
+              values (@plant, @asset, @prev_thk, @prev_date, @last_thk, @last_date);
+              """;
+
+        cmd.Parameters.Add("plant", NpgsqlDbType.Text).Value = CentralPlantCode;
+        cmd.Parameters.Add("asset", NpgsqlDbType.Text).Value = assetCode.Trim();
+        cmd.Parameters.Add("prev_thk", NpgsqlDbType.Numeric).Value = (object?)prevThk ?? DBNull.Value;
+        cmd.Parameters.Add("prev_date", NpgsqlDbType.TimestampTz).Value = (object?)prevDateUtc ?? DBNull.Value;
+        cmd.Parameters.Add("last_thk", NpgsqlDbType.Numeric).Value = lastThk;
+        cmd.Parameters.Add("last_date", NpgsqlDbType.TimestampTz).Value = lastDateUtc;
+        if (hasExtras)
+        {
+            cmd.Parameters.Add("label", NpgsqlDbType.Text).Value = string.IsNullOrWhiteSpace(label) ? DBNull.Value : label.Trim();
+            cmd.Parameters.Add("note", NpgsqlDbType.Text).Value = string.IsNullOrWhiteSpace(note) ? DBNull.Value : note.Trim();
+        }
+
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private async Task<bool> HasExtendedColumnsAsync(NpgsqlConnection conn)
+    {
+        if (hasExtendedColumns.HasValue) return hasExtendedColumns.Value;
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+                          select 1
+                          from information_schema.columns
+                          where table_schema = 'public'
+                            and table_name = 'measurement_batches'
+                            and column_name in ('last_label','last_note')
+                          limit 1
+                          """;
+
+        hasExtendedColumns = await cmd.ExecuteScalarAsync() is not null;
+        return hasExtendedColumns.Value;
     }
 
     private async Task<AnalyticsLastState> LoadLastAnalyticsAsync(string assetCode)
@@ -273,20 +582,14 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
         return new AnalyticsLastState(lastDate, lastThk);
     }
 
-    private static string BuildPayload(string assetCode, decimal? prevThk, DateTime? prevDateUtc, decimal lastThk, DateTime lastDateUtc)
-    {
-        var obj = new Dictionary<string, object?>
-        {
-            ["asset_code"] = assetCode,
-            ["prev_thk"] = prevThk,
-            ["prev_date"] = prevDateUtc,
-            ["last_thk"] = lastThk,
-            ["last_date"] = lastDateUtc
-        };
-        return JsonSerializer.Serialize(obj);
-    }
-
     private sealed record AnalyticsLastState(DateTime? LastDateUtc, decimal? LastThickness);
+
+    private static bool IsEditableInCentral(CentralMeasurementEquipmentRowViewModel row)
+    {
+        if (row is null) return false;
+        return string.IsNullOrWhiteSpace(row.PlantCode)
+               || string.Equals(row.PlantCode, CentralPlantCode, StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 public sealed record CentralMeasurementColumnViewModel(DateTimeOffset Timestamp, string Header);
@@ -295,11 +598,12 @@ public sealed partial class CentralMeasurementEquipmentRowViewModel : Observable
 {
     private readonly Dictionary<DateTimeOffset, decimal> valuesByTimestamp = new();
 
-    public CentralMeasurementEquipmentRowViewModel(string code, string? name, string? type)
+    public CentralMeasurementEquipmentRowViewModel(string code, string? name, string? type, string? plantCode)
     {
         Code = code;
         Name = name;
         Type = type;
+        PlantCode = NormalizePlant(plantCode);
         Cells = new ObservableCollection<string>();
     }
 
@@ -309,6 +613,10 @@ public sealed partial class CentralMeasurementEquipmentRowViewModel : Observable
 
     public string? Type { get; }
 
+    public string? PlantCode { get; }
+
+    public DateTimeOffset? LastMeasurementUtc { get; private set; }
+
     public ObservableCollection<string> Cells { get; }
 
     public void TryAddValue(DateTimeOffset ts, decimal thickness)
@@ -316,6 +624,11 @@ public sealed partial class CentralMeasurementEquipmentRowViewModel : Observable
         if (!valuesByTimestamp.ContainsKey(ts))
         {
             valuesByTimestamp[ts] = thickness;
+        }
+
+        if (LastMeasurementUtc is null || ts > LastMeasurementUtc.Value)
+        {
+            LastMeasurementUtc = ts;
         }
     }
 
@@ -334,4 +647,16 @@ public sealed partial class CentralMeasurementEquipmentRowViewModel : Observable
             }
         }
     }
+
+    private static string? NormalizePlant(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var upper = value.Trim().ToUpperInvariant();
+        return upper == "KRNPZ" ? "KNPZ" : upper;
+    }
+}
+
+public sealed record CentralMeasurementsGroupHeaderViewModel(string Title, int Count)
+{
+    public string DisplayTitle => $"{Title} ({Count})";
 }

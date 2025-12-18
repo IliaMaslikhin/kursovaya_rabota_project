@@ -35,7 +35,8 @@ public sealed class StoragePortFactory
 
     private static DatabaseProfile DetectProfile(string plant)
     {
-        if (string.Equals(plant, "KRNPZ", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(plant, "KRNPZ", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(plant, "KNPZ", StringComparison.OrdinalIgnoreCase))
             return DatabaseProfile.PlantKrnpz;
         return DatabaseProfile.PlantAnpz;
     }

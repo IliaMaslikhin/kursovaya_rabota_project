@@ -16,6 +16,8 @@ DECLARE
   v_prev_thk  numeric;
   v_last_date timestamptz;
   v_last_thk  numeric;
+  v_last_label text;
+  v_last_note  text;
   v_existing_last_date timestamptz;
   v_existing_last_thk  numeric;
   v_batch_first_date   timestamptz;
@@ -27,12 +29,12 @@ BEGIN
   p_inserted := 0;
 
   WITH s AS (SELECT id FROM public.assets_local WHERE asset_code = p_asset_code LIMIT 1),
-       i AS (
-         INSERT INTO public.assets_local(asset_code, location, status)
-         SELECT p_asset_code, NULL, NULL
-         WHERE NOT EXISTS (SELECT 1 FROM s)
-         RETURNING id
-       )
+	       i AS (
+	         INSERT INTO public.assets_local(asset_code, location, status)
+	         SELECT p_asset_code, NULL, 'OK'
+	         WHERE NOT EXISTS (SELECT 1 FROM s)
+	         RETURNING id
+	       )
   SELECT COALESCE((SELECT id FROM s), (SELECT id FROM i)) INTO v_asset_id;
 
   SELECT m.ts, m.thickness
@@ -49,7 +51,7 @@ BEGIN
            NULLIF(x.value->>'ts','')::timestamptz AS ts,
            NULLIF(x.value->>'thickness','')::numeric AS thickness,
            NULLIF(x.value->>'note','') AS note
-    FROM jsonb_array_elements_with_ordinality(p_points) AS x(value, ordinality)
+    FROM jsonb_array_elements(p_points) WITH ORDINALITY AS x(value, ordinality)
   ),
   valid AS (
     SELECT * FROM parsed
@@ -133,7 +135,7 @@ BEGIN
   GET DIAGNOSTICS p_inserted = ROW_COUNT;
 
   WITH ordered AS (
-    SELECT m.ts, m.thickness, row_number() OVER (ORDER BY m.ts DESC, m.id DESC) AS rn
+    SELECT m.ts, m.thickness, mp.label, m.note, row_number() OVER (ORDER BY m.ts DESC, m.id DESC) AS rn
     FROM public.measurements m
     JOIN public.measurement_points mp ON mp.id = m.point_id
     WHERE mp.asset_id = v_asset_id
@@ -142,25 +144,14 @@ BEGIN
     MAX(ts) FILTER (WHERE rn = 2) AS prev_date,
     MAX(thickness) FILTER (WHERE rn = 2) AS prev_thk,
     MAX(ts) FILTER (WHERE rn = 1) AS last_date,
-    MAX(thickness) FILTER (WHERE rn = 1) AS last_thk
-  INTO v_prev_date, v_prev_thk, v_last_date, v_last_thk
+    MAX(thickness) FILTER (WHERE rn = 1) AS last_thk,
+    MAX(label) FILTER (WHERE rn = 1) AS last_label,
+    MAX(note) FILTER (WHERE rn = 1) AS last_note
+  INTO v_prev_date, v_prev_thk, v_last_date, v_last_thk, v_last_label, v_last_note
   FROM ordered;
 
   IF p_inserted > 0 THEN
-    INSERT INTO central_ft.events_inbox
-      (id, event_type, source_plant, payload_json, created_at, processed_at)
-    VALUES
-      (DEFAULT,
-       'HC_MEASUREMENT_BATCH',
-       v_source,
-       jsonb_build_object(
-         'asset_code', p_asset_code,
-         'prev_thk',   v_prev_thk,
-         'prev_date',  v_prev_date,
-         'last_thk',   v_last_thk,
-         'last_date',  v_last_date
-       ),
-       DEFAULT,
-       NULL);
+    INSERT INTO central_ft.measurement_batches(source_plant, asset_code, prev_thk, prev_date, last_thk, last_date, last_label, last_note)
+    VALUES (v_source, p_asset_code, v_prev_thk, v_prev_date, v_last_thk, v_last_date, v_last_label, v_last_note);
   END IF;
 END$$;

@@ -26,15 +26,12 @@ UI читает `OIL_ERP_PG`/`OIL_ERP_PG_TIMEOUT`, но при ProjectReference 
 - **Smoke/CLI**: `dotnet run --project src/OilErp.Tests.Runner` (меню) или команды:
   - `add-asset --id A-001 --name "Pipe #1" --plant ANPZ`
   - `add-measurements-anpz --file ./points.json|csv`
-  - `events-peek --limit 10`, `events-ingest --max 5000`, `events-requeue --age-sec 3600`, `events-cleanup --age-sec 86400`
   - `summary --asset A-001 [--policy default]`, `top-by-cr --take 20`, `eval-risk --asset A-001`, `plant-cr --plant ANPZ --from 2024-01-01 --to 2025-01-01`
-  - `watch --channel events_ingest`
 - **UI**: `dotnet run --project src/OilErp.Ui` (Avalonia). Требует рабочее соединение: MeasurementDataProvider использует live-данные, снапшоты лишь дополняют пустую БД.
 
 ## Поведение ingest/аналитики
-- Заводы публикуют `HC_MEASUREMENT_BATCH` в central через FDW; central `fn/sp_ingest_events` принимает только этот тип, проверяет порядок дат/толщин и шлёт `NOTIFY events_ingest`.
+- Заводы пишут батчи замеров напрямую в central через FDW (`central.measurement_batches`); триггер central обновляет `assets_global` и `analytics_cr`.
 - Аналитика строится из `analytics_cr`: `fn_top_assets_by_cr`, `fn_asset_summary_json`, `fn_eval_risk`, `fn_plant_cr_stats`.
 
 ## Логи и диагностика
 - Логи: `%APPDATA%/OilErp/logs/app-*.log`.
-- LISTEN/NOTIFY: канал `events_ingest` (ingest), можно слушать через CLI `watch` или Diagnostics в UI.

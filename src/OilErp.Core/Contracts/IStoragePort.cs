@@ -30,21 +30,6 @@ public interface IStoragePort
     /// <param name="ct">Cancellation token</param>
     /// <returns>Transaction disposable</returns>
     Task<IStorageTransaction> BeginTransactionAsync(CancellationToken ct = default);
-
-    /// <summary>
-    /// Subscribe to a notification channel (LISTEN)
-    /// </summary>
-    Task SubscribeAsync(string channel, CancellationToken ct = default);
-
-    /// <summary>
-    /// Unsubscribe from a notification channel (UNLISTEN)
-    /// </summary>
-    Task UnsubscribeAsync(string channel, CancellationToken ct = default);
-
-    /// <summary>
-    /// Event fired when database notifications are received
-    /// </summary>
-    event EventHandler<DbNotification>? Notified;
 }
 
 /// <summary>

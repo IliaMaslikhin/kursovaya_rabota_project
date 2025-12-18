@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using OilErp.Bootstrap;
 using OilErp.Core.Dto;
 using OilErp.Ui.Services;
 using Avalonia.Styling;
@@ -28,31 +27,23 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         this.kernelGateway = kernelGateway ?? throw new ArgumentNullException(nameof(kernelGateway));
         Profile = profile;
-        Title = profile switch
-        {
-            DatabaseProfile.Central => "OilErp — Central",
-            DatabaseProfile.PlantAnpz => "OilErp — ANPZ",
-            DatabaseProfile.PlantKrnpz => "OilErp — KRNPZ",
-            _ => "OilErp"
-        };
+        var dbDisplay = ExtractDatabaseDisplayName(kernelGateway.ActualDatabase);
+        Title = dbDisplay == "?" ? "OilErp" : $"OilErp — {dbDisplay}";
 
-        ConnectionDisplay = SimplifyConnectionString(connectionString);
+        ConnectionDisplay = SimplifyConnectionString(connectionString, kernelGateway.ActualDatabase);
         Status = kernelGateway.StatusMessage;
         ThemeOptions = BuildThemeOptions();
         SelectedTheme = ThemeOptions[0];
 
         var storage = kernelGateway.Storage;
-        var factory = new StoragePortFactory(storage);
-        Diagnostics = new DiagnosticsPanelViewModel(factory);
 
         if (IsCentralProfile)
         {
             EquipmentCentral = new CentralEquipmentTabViewModel(storage, connectionString);
             PoliciesCentral = new CentralPoliciesTabViewModel(storage, connectionString);
 
-            Analytics = new AnalyticsPanelViewModel(storage);
-            EventQueue = new EventQueueViewModel(storage);
-            MeasurementsCentral = new CentralMeasurementsTabViewModel(storage, connectionString);
+            Analytics = new AnalyticsPanelViewModel(connectionString);
+            MeasurementsCentral = new CentralMeasurementsTabViewModel(connectionString);
 
             _ = EquipmentCentral.RefreshAsync();
             _ = PoliciesCentral.RefreshAsync();
@@ -92,10 +83,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty] private AnalyticsPanelViewModel? analytics;
 
-    [ObservableProperty] private EventQueueViewModel? eventQueue;
-
-    [ObservableProperty] private DiagnosticsPanelViewModel? diagnostics;
-
     public IReadOnlyList<ThemeOption> ThemeOptions { get; }
 
     [ObservableProperty] private ThemeOption selectedTheme;
@@ -119,12 +106,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     private static string SimplifyConnectionString(string connectionString)
+        => SimplifyConnectionString(connectionString, actualDatabase: null);
+
+    private static string SimplifyConnectionString(string connectionString, string? actualDatabase)
     {
         try
         {
             var builder = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
             var host = string.IsNullOrWhiteSpace(builder.Host) ? "?" : builder.Host;
-            var db = string.IsNullOrWhiteSpace(builder.Database) ? "?" : builder.Database;
+            var db = ExtractDatabaseDisplayName(actualDatabase ?? builder.Database);
             var user = string.IsNullOrWhiteSpace(builder.Username) ? "?" : builder.Username;
             var port = builder.Port > 0 ? builder.Port.ToString() : "?";
             return $"{host}:{port} · {db} · {user}";
@@ -135,10 +125,22 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    private static string ExtractDatabaseDisplayName(string? databaseName)
+    {
+        if (string.IsNullOrWhiteSpace(databaseName)) return "?";
+
+        var raw = databaseName.Trim();
+        var upper = raw.ToUpperInvariant();
+        if (upper.Contains("ANPZ")) return "ANPZ";
+        if (upper.Contains("KRNPZ") || upper.Contains("KNPZ")) return "KNPZ";
+        if (upper.Contains("CENTRAL")) return "Central";
+        return raw;
+    }
+
     private static ThemeOption[] BuildThemeOptions() =>
         new[]
         {
-            new ThemeOption("ultra-black", "Ultra black", ThemePalette.UltraBlack, ThemeVariant.Dark),
-            new ThemeOption("jetbrains-light", "JetBrains light", ThemePalette.JetBrainsLight, ThemeVariant.Light)
+            new ThemeOption("dark", "Тёмная", ThemePalette.UltraBlack, ThemeVariant.Dark),
+            new ThemeOption("light", "Светлая", ThemePalette.JetBrainsLight, ThemeVariant.Light)
         };
 }

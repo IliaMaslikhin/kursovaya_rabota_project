@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:OilErp.Ui.ViewModels"
+        xmlns:conv="using:OilErp.Ui.Converters"
         x:Class="OilErp.Ui.Views.EquipmentEditWindow"
         x:DataType="vm:EquipmentEditWindowViewModel"
         Width="460"
@@ -8,6 +9,10 @@
         CanResize="False"
         WindowStartupLocation="CenterOwner"
         Title="{Binding Title}">
+
+    <Window.Resources>
+        <conv:BoolInvertConverter x:Key="BoolInvert"/>
+    </Window.Resources>
 
     <Grid RowDefinitions="Auto,*"
           Margin="18"
@@ -42,9 +47,19 @@
                 <StackPanel Spacing="6">
                     <TextBlock Text="{Binding Field2Label}"
                                Foreground="{DynamicResource Brush.TextSecondary}"/>
+                    <ComboBox ItemsSource="{Binding Field2Options}"
+                              Text="{Binding Field2}"
+                              IsEditable="True"
+                              IsVisible="{Binding HasField2Options}"/>
                     <TextBox Text="{Binding Field2}"
-                             Watermark="(опционально)"/>
+                             Watermark="(опционально)"
+                             IsVisible="{Binding HasField2Options, Converter={StaticResource BoolInvert}}"/>
                 </StackPanel>
+
+                <TextBlock Text="Локация и статус — справочные поля для фильтрации/поиска. Для завода статус по умолчанию OK."
+                           IsVisible="{Binding ShowPlantMetaHint}"
+                           Foreground="{DynamicResource Brush.TextSecondary}"
+                           TextWrapping="Wrap"/>
 
                 <StackPanel Orientation="Horizontal"
                             Spacing="10"
@@ -52,6 +67,7 @@
                     <Button Content="Отмена"
                             Command="{Binding CancelCommand}"/>
                     <Button Content="Сохранить"
+                            Classes="primary"
                             Command="{Binding SaveCommand}"/>
                 </StackPanel>
 
@@ -62,4 +78,3 @@
         </Border>
     </Grid>
 </Window>
-

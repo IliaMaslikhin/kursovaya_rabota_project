@@ -57,17 +57,15 @@ namespace OilErp.Tests.Runner;
         var kernelSmoke = new KernelSmoke();
         var storageSmoke = new StorageSmoke();
         var extendedSmoke = new ExtendedSmokeTests();
-        var loadSmoke = new LoadSmokeTests();
         var asyncSmoke = new AsyncSmokeTests();
         var bootstrapSmoke = new BootstrapSmokeTests();
         var validationSmoke = new ValidationSmokeTests();
         var profilesSmoke = new ProfilesSmoke();
         var negativeSmoke = new NegativeSmokeTests();
-        var listenSmoke = new ListenSmokeTests();
         var plantE2eSmoke = new PlantE2eSmokeTests();
 
         const string CategoryConnection = "Подключение к базе";
-        const string CategoryIngestion = "Загрузка и очередь";
+        const string CategoryIngestion = "Загрузка данных";
         const string CategoryAnalytics = "Аналитика и отчёты";
         const string CategoryReliability = "Надёжность и асинхронность";
         const string CategoryValidation = "Валидация окружения";
@@ -107,13 +105,6 @@ namespace OilErp.Tests.Runner;
             "Конвейер загрузки/аналитики не завершён",
             storageSmoke.TestCentralBulkDataSeedAndAnalytics);
         RegisterScenario(
-            "Central_Event_Queue_Integrity",
-            CategoryIngestion,
-            "Очередь событий после загрузки",
-            "Очередь очищена",
-            "В очереди остались события",
-            storageSmoke.TestCentralEventQueueIntegrity);
-        RegisterScenario(
             "Plant_Cr_Stats_Match_Seed",
             CategoryAnalytics,
             "CR-статистика по заводу",
@@ -152,35 +143,6 @@ namespace OilErp.Tests.Runner;
             "Фейковый порт считает параллельные вызовы",
             "Счётчик параллельных команд некорректен",
             asyncSmoke.TestFakeStorageConcurrentCommandsCounter);
-        RegisterScenario(
-            "Fake_Storage_Notification_Broadcast",
-            CategoryReliability,
-            "Рассылка уведомлений фейкового хранилища",
-            "Подписчики получают уведомления",
-            "Уведомления не доставляются подписчикам",
-            asyncSmoke.TestFakeStorageNotificationBroadcast);
-        RegisterScenario(
-            "Fake_Storage_Subscribe_Unsubscribe",
-            CategoryReliability,
-            "Подписка/отписка на каналы",
-            "Subscribe/Unsubscribe идут через порт",
-            "Subscribe/Unsubscribe не вызываются",
-            asyncSmoke.TestFakeStorageSubscribeUnsubscribe);
-        RegisterScenario(
-            "Listen_Notify_Roundtrip",
-            CategoryReliability,
-            "LISTEN/NOTIFY круговой тест",
-            "Уведомление получено",
-            "Уведомление не доставлено",
-            asyncSmoke.TestListenNotifyRoundtrip);
-
-        RegisterScenario(
-            "Listen_Cancel_Unsubscribes",
-            CategoryReliability,
-            "Отмена слушателя LISTEN",
-            "Слушатель корректно закрыт",
-            "Отписка от канала не сработала",
-            listenSmoke.TestListenCancelUnsubscribes);
 
         // Валидация окружения
         RegisterScenario(
@@ -237,28 +199,12 @@ namespace OilErp.Tests.Runner;
             plantE2eSmoke.TestPlantEventsReachAnalytics);
 
         RegisterScenario(
-            "Bulk_Events_Rollback_Safe",
-            CategoryIngestion,
-            "Массовый ingest с откатом",
-            "Ingest большого батча проходит",
-            "Ingest большого батча не отработал",
-            loadSmoke.TestBulkEventsRollbackSafe);
-
-        RegisterScenario(
             "Plant_Insert_Validation_Fails",
             CategoryValidation,
             "Валидация заводской функции",
             "Ошибка при пустом asset_code",
             "Вставка прошла без ошибки",
             negativeSmoke.TestPlantInsertValidationFails);
-
-        RegisterScenario(
-            "Events_Enqueue_Invalid_Json",
-            CategoryValidation,
-            "Невалидный JSON для enqueue",
-            "Исключение брошено",
-            "Невалидный JSON принят",
-            negativeSmoke.TestEventsEnqueueInvalidJson);
 
         await runner.RunAndPrintAsync();
     }
@@ -268,56 +214,6 @@ namespace OilErp.Tests.Runner;
         await tx.CommitAsync(CancellationToken.None);
     }
 
-
-    private static async Task<bool> CmdWatchAsync(string[] args)
-    {
-        string? channel = null;
-        int timeoutSec = 60;
-        for (int i = 0; i < args.Length; i++)
-        {
-            switch (args[i])
-            {
-                case "--channel": channel = args.ElementAtOrDefault(++i); break;
-                case "--timeout-sec": int.TryParse(args.ElementAtOrDefault(++i), out timeoutSec); break;
-            }
-        }
-        if (string.IsNullOrWhiteSpace(channel))
-        {
-            Console.WriteLine("ошибка: --channel is required");
-            return false;
-        }
-
-        var kernel = CreateKernel();
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(Math.Max(1, timeoutSec)));
-
-        void OnNotified(object? sender, OilErp.Core.Dto.DbNotification n)
-        {
-            Console.WriteLine($"pid={n.ProcessId} канал={n.Channel} данные={n.Payload}");
-        }
-
-        try
-        {
-            kernel.Storage.Notified += OnNotified;
-            await kernel.Storage.SubscribeAsync(channel, CancellationToken.None);
-            Console.WriteLine($"Следим за каналом '{channel}' в течение {timeoutSec} с...");
-            try
-            {
-                await Task.Delay(Timeout.InfiniteTimeSpan, cts.Token);
-            }
-            catch (OperationCanceledException) { }
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"ошибка: {ex.Message}");
-            return false;
-        }
-        finally
-        {
-            try { await kernel.Storage.UnsubscribeAsync(channel!, CancellationToken.None); } catch { }
-            kernel.Storage.Notified -= OnNotified;
-        }
-    }
 
     private static KernelAdapter CreateKernel(DatabaseProfile profile = DatabaseProfile.Central) => TestEnvironment.CreateKernel(profile);
 
@@ -332,14 +228,6 @@ namespace OilErp.Tests.Runner;
                 return await CmdAddAssetAsync(args.Skip(1).ToArray());
             case "add-measurements-anpz":
                 return await CmdAddMeasurementsAnpzAsync(args.Skip(1).ToArray());
-            case "events-peek":
-                return await CmdEventsPeekAsync(args.Skip(1).ToArray());
-            case "events-ingest":
-                return await CmdEventsIngestAsync(args.Skip(1).ToArray());
-            case "events-requeue":
-                return await CmdEventsRequeueAsync(args.Skip(1).ToArray());
-            case "events-cleanup":
-                return await CmdEventsCleanupAsync(args.Skip(1).ToArray());
             case "summary":
                 return await CmdSummaryAsync(args.Skip(1).ToArray());
             case "top-by-cr":
@@ -348,8 +236,6 @@ namespace OilErp.Tests.Runner;
                 return await CmdEvalRiskAsync(args.Skip(1).ToArray());
             case "plant-cr":
                 return await CmdPlantCrAsync(args.Skip(1).ToArray());
-            case "watch":
-                return await CmdWatchAsync(args.Skip(1).ToArray());
             case "--help":
             case "-h":
             default:
@@ -363,15 +249,10 @@ namespace OilErp.Tests.Runner;
         Console.WriteLine("Использование:");
         Console.WriteLine("  add-asset --id <текст> --name <текст> --plant <текст>");
         Console.WriteLine("  add-measurements-anpz --file <путь csv|json>");
-        Console.WriteLine("  events-peek --limit <N>");
-        Console.WriteLine("  events-ingest --max <N>");
-        Console.WriteLine("  events-requeue --age-sec <N>");
-        Console.WriteLine("  events-cleanup --age-sec <N>");
         Console.WriteLine("  summary --plant <текст> [--asset <id>] [--policy <имя>]");
         Console.WriteLine("  top-by-cr --plant <текст> --take <N>");
         Console.WriteLine("  eval-risk --asset <id> [--policy <имя>]");
         Console.WriteLine("  plant-cr --plant <текст> --from <гггг-мм-дд> --to <гггг-мм-дд>");
-        Console.WriteLine("  watch --channel <текст> [--timeout-sec <N>]  (events_ingest, events_enqueue, events_requeue, events_cleanup)");
         Console.WriteLine();
     }
 
@@ -674,113 +555,6 @@ namespace OilErp.Tests.Runner;
         }
     }
 
-    private static async Task<bool> CmdEventsPeekAsync(string[] args)
-    {
-        int limit = 10;
-        for (int i = 0; i < args.Length; i++)
-            if (args[i] == "--limit") int.TryParse(args.ElementAtOrDefault(++i), out limit);
-
-        var kernel = CreateKernel();
-        await using var tx = await kernel.Storage.BeginTransactionAsync();
-        try
-        {
-            var svc = new FnEventsPeekService(kernel.Storage);
-            var rows = await svc.fn_events_peekAsync(limit, CancellationToken.None);
-            Console.WriteLine($"ок: строк={rows.Count}");
-            if (rows.Count > 0)
-            {
-                foreach (var row in rows.Take(5))
-                {
-                    Console.WriteLine($"id={row.Id} type={row.EventType} plant={row.SourcePlant} created={row.CreatedAt} payload={Truncate(row.PayloadJson, 200)}");
-                }
-            }
-            await CommitTxAsync(tx);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"ошибка: {ex.Message}");
-            return false;
-        }
-    }
-
-    private static async Task<bool> CmdEventsIngestAsync(string[] args)
-    {
-        int max = 1000;
-        for (int i = 0; i < args.Length; i++)
-            if (args[i] == "--max") int.TryParse(args.ElementAtOrDefault(++i), out max);
-
-        var kernel = CreateKernel();
-        await using var tx = await kernel.Storage.BeginTransactionAsync();
-        try
-        {
-            var svc = new FnIngestEventsService(kernel.Storage);
-            var affected = await svc.fn_ingest_eventsAsync(max, CancellationToken.None);
-            Console.WriteLine($"ок: строк={affected}");
-            await CommitTxAsync(tx);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"ошибка: {ex.Message}");
-            return false;
-        }
-    }
-
-    private static async Task<bool> CmdEventsRequeueAsync(string[] args)
-    {
-        int ageSec = 3600;
-        for (int i = 0; i < args.Length; i++)
-            if (args[i] == "--age-sec") int.TryParse(args.ElementAtOrDefault(++i), out ageSec);
-
-        var kernel = CreateKernel();
-        await using var tx = await kernel.Storage.BeginTransactionAsync();
-        try
-        {
-            // Эвристика: берем события старше ageSec среди необработанных (peek), ре-киюим их (idempotent)
-            var peek = new FnEventsPeekService(kernel.Storage);
-            var rows = await peek.fn_events_peekAsync(int.MaxValue, CancellationToken.None);
-            var cutoff = DateTime.UtcNow - TimeSpan.FromSeconds(ageSec);
-            var ids = rows
-                .Where(r => r.CreatedAt <= cutoff)
-                .Select(r => r.Id)
-                .ToArray();
-
-            var svc = new FnEventsRequeueService(kernel.Storage);
-            var affected = await svc.fn_events_requeueAsync(ids, CancellationToken.None);
-            Console.WriteLine($"ок: строк={affected} ids={ids.Length}");
-            await CommitTxAsync(tx);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"ошибка: {ex.Message}");
-            return false;
-        }
-    }
-
-    private static async Task<bool> CmdEventsCleanupAsync(string[] args)
-    {
-        int ageSec = 30 * 24 * 3600;
-        for (int i = 0; i < args.Length; i++)
-            if (args[i] == "--age-sec") int.TryParse(args.ElementAtOrDefault(++i), out ageSec);
-
-        var kernel = CreateKernel();
-        await using var tx = await kernel.Storage.BeginTransactionAsync();
-        try
-        {
-            var svc = new FnEventsCleanupService(kernel.Storage);
-            var affected = await svc.fn_events_cleanupAsync(TimeSpan.FromSeconds(ageSec), CancellationToken.None);
-            Console.WriteLine($"ок: строк={affected}");
-            await CommitTxAsync(tx);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"ошибка: {ex.Message}");
-            return false;
-        }
-    }
 }
 
 internal static class TestEnvironment

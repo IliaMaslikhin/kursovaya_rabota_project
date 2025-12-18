@@ -52,7 +52,8 @@ public sealed class MeasurementIngestionService
 
     private async Task<int> ExecutePlantCommandAsync(IStoragePort storage, string plant, string assetCode, string pointsJson, CancellationToken ct)
     {
-        if (string.Equals(plant, "KRNPZ", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(plant, "KRNPZ", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(plant, "KNPZ", StringComparison.OrdinalIgnoreCase))
         {
             var krnpz = new KrnpzInsertService(storage);
             return await krnpz.sp_insert_measurement_batchAsync(assetCode, pointsJson, plant, ct);
@@ -63,5 +64,10 @@ public sealed class MeasurementIngestionService
     }
 
     private static string NormalizePlant(string plant)
-        => string.IsNullOrWhiteSpace(plant) ? "ANPZ" : plant.Trim().ToUpperInvariant();
+    {
+        if (string.IsNullOrWhiteSpace(plant)) return "ANPZ";
+
+        var value = plant.Trim().ToUpperInvariant();
+        return value == "KRNPZ" ? "KNPZ" : value;
+    }
 }

@@ -11,7 +11,6 @@ public class FakeStoragePort : IStoragePort
     private readonly List<QuerySpec> _queryHistory = new();
     private readonly List<CommandSpec> _commandHistory = new();
     private readonly Dictionary<string, int> _methodCallCounts = new();
-    private readonly List<DbNotification> _notifications = new();
     private readonly List<FakeTransaction> _transactions = new();
     private int _artificialDelayMs = 0;
 
@@ -29,11 +28,6 @@ public class FakeStoragePort : IStoragePort
     /// Gets the method call counts
     /// </summary>
     public IReadOnlyDictionary<string, int> MethodCallCounts => _methodCallCounts.AsReadOnly();
-
-    /// <summary>
-    /// Gets the notifications that were raised
-    /// </summary>
-    public IReadOnlyList<DbNotification> Notifications => _notifications.AsReadOnly();
 
     /// <summary>
     /// Gets the active transactions
@@ -88,31 +82,6 @@ public class FakeStoragePort : IStoragePort
         return Task.FromResult<IStorageTransaction>(transaction);
     }
 
-    public Task SubscribeAsync(string channel, CancellationToken ct = default)
-    {
-        IncrementCallCount(nameof(SubscribeAsync));
-        return Task.CompletedTask;
-    }
-
-    public Task UnsubscribeAsync(string channel, CancellationToken ct = default)
-    {
-        IncrementCallCount(nameof(UnsubscribeAsync));
-        return Task.CompletedTask;
-    }
-
-    /// <inheritdoc />
-    public event EventHandler<DbNotification>? Notified;
-
-    /// <summary>
-    /// Raises a notification event
-    /// </summary>
-    /// <param name="notification">Notification to raise</param>
-    public void RaiseNotification(DbNotification notification)
-    {
-        _notifications.Add(notification);
-        Notified?.Invoke(this, notification);
-    }
-
     /// <summary>
     /// Clears all history and counters
     /// </summary>
@@ -121,7 +90,6 @@ public class FakeStoragePort : IStoragePort
         _queryHistory.Clear();
         _commandHistory.Clear();
         _methodCallCounts.Clear();
-        _notifications.Clear();
         _transactions.Clear();
     }
 

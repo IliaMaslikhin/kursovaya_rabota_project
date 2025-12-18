@@ -1,0 +1,65 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OilErp.Ui.ViewModels"
+        x:Class="OilErp.Ui.Views.PlantMeasurementsTransferWindow"
+        x:DataType="vm:PlantMeasurementsTransferWindowViewModel"
+        Width="620"
+        Height="260"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="{Binding Title}">
+
+    <Grid RowDefinitions="Auto,*"
+          Margin="18"
+          RowSpacing="12">
+        <StackPanel Spacing="6">
+            <TextBlock Text="{Binding Title}"
+                       FontSize="18"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource Brush.TextPrimary}"/>
+            <TextBlock Text="{Binding StatusMessage}"
+                       Foreground="{DynamicResource Brush.TextSecondary}"
+                       TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <Border Grid.Row="1"
+                Padding="14"
+                Background="{DynamicResource Brush.CardBackground}"
+                BorderBrush="{DynamicResource Brush.Border}"
+                BorderThickness="1"
+                CornerRadius="12">
+            <StackPanel Spacing="10">
+                <WrapPanel>
+                    <WrapPanel.Styles>
+                        <Style Selector="WrapPanel > :is(Control)">
+                            <Setter Property="Margin" Value="0,0,10,10"/>
+                        </Style>
+                    </WrapPanel.Styles>
+                    <Button Content="Экспорт CSV"
+                            Command="{Binding ExportCsvCommand}"/>
+                    <Button Content="Экспорт JSON"
+                            Command="{Binding ExportJsonCommand}"/>
+                    <Button Content="Экспорт XLSX"
+                            Command="{Binding ExportXlsxCommand}"/>
+                    <Button Content="Импорт CSV"
+                            Command="{Binding ImportCsvCommand}"/>
+                    <Button Content="Импорт JSON"
+                            Command="{Binding ImportJsonCommand}"/>
+                </WrapPanel>
+
+                <StackPanel Orientation="Horizontal"
+                            Spacing="10"
+                            HorizontalAlignment="Right">
+                    <ProgressBar IsIndeterminate="True"
+                                 IsVisible="{Binding IsBusy}"
+                                 Width="120"
+                                 Height="4"
+                                 VerticalAlignment="Center"/>
+                    <Button Content="Закрыть"
+                            Command="{Binding CloseCommand}"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
+

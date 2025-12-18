@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
+using Npgsql;
 using OilErp.Core.Dto;
 using OilErp.Core.Operations;
 using OilErp.Core.Services.Aggregations;
@@ -27,7 +27,7 @@ public class StorageSmoke
         try
         {
             var storage = TestEnvironment.CreateStorageAdapter();
-            var scenario = new CentralHealthCheckScenario(storage, _dataSet);
+            var scenario = new CentralHealthCheckScenario(storage, TestEnvironment.ConnectionString, _dataSet);
 
             var seedSnapshot = await scenario.SeedAsync(CancellationToken.None);
             var verification = await scenario.VerifyAnalyticsAsync(seedSnapshot, CancellationToken.None);
@@ -47,32 +47,6 @@ public class StorageSmoke
     }
 
     /// <summary>
-    /// Ensures that after ingestion there are no dangling events for the seeded assets.
-    /// </summary>
-    public async Task<TestResult> TestCentralEventQueueIntegrity()
-    {
-        const string testName = "Central_Event_Queue_Integrity";
-        try
-        {
-            var storage = TestEnvironment.CreateStorageAdapter();
-            var scenario = new CentralHealthCheckScenario(storage, _dataSet);
-            var seedSnapshot = await scenario.SeedAsync(CancellationToken.None);
-            var queueVerification = await scenario.VerifyQueueDrainAsync(seedSnapshot, CancellationToken.None);
-
-            if (!queueVerification.Success)
-            {
-                return new TestResult(testName, false, queueVerification.ErrorMessage);
-            }
-
-            return new TestResult(testName, true);
-        }
-        catch (Exception ex)
-        {
-            return new TestResult(testName, false, ex.Message);
-        }
-    }
-
-    /// <summary>
     /// Validates plant CR stats (mean/P90) via SQL aggregation.
     /// </summary>
     public async Task<TestResult> TestPlantCrStatsMatchesSeed()
@@ -81,7 +55,7 @@ public class StorageSmoke
         try
         {
             var storage = TestEnvironment.CreateStorageAdapter();
-            var scenario = new CentralHealthCheckScenario(storage, _dataSet);
+            var scenario = new CentralHealthCheckScenario(storage, TestEnvironment.ConnectionString, _dataSet);
             var snapshot = await scenario.SeedAsync(CancellationToken.None);
 
             var svc = new PlantCrService(storage);
@@ -195,12 +169,13 @@ internal sealed record SimpleVerification(bool Success, string? ErrorMessage)
 internal sealed class CentralHealthCheckScenario
 {
     private readonly StorageAdapter _storage;
+    private readonly string _connectionString;
     private readonly HealthCheckDataSet _dataSet;
-    private const string EventType = "HC_MEASUREMENT_BATCH";
 
-    public CentralHealthCheckScenario(StorageAdapter storage, HealthCheckDataSet dataSet)
+    public CentralHealthCheckScenario(StorageAdapter storage, string connectionString, HealthCheckDataSet dataSet)
     {
         _storage = storage;
+        _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
         _dataSet = dataSet;
     }
 
@@ -213,14 +188,13 @@ internal sealed class CentralHealthCheckScenario
         foreach (var seed in _dataSet.Seeds)
         {
             await UpsertAssetAsync(seed, ct);
-            await EnqueueMeasurementAsync(seed, ct);
+            await InsertMeasurementBatchAsync(seed, ct);
             var expectedCr = CalculateCorrosionRate(seed);
             var expectedLevel = DetermineRiskLevel(expectedCr);
             expectations.Add(new AssetExpectation(seed, expectedCr, expectedLevel));
             Console.WriteLine($"[Посев] Актив={seed.AssetCode} пред={seed.PrevThickness}@{seed.PrevDateUtc:O} тек={seed.LastThickness}@{seed.LastDateUtc:O} -> ожидаемый CR={expectedCr:F4} ({expectedLevel})");
         }
 
-        await DrainEventsAsync(ct);
         return new HealthCheckSeedSnapshot(_dataSet.PolicyName, expectations);
     }
 
@@ -282,37 +256,6 @@ internal sealed class CentralHealthCheckScenario
         return AnalyticsVerification.SuccessResult(outputRows);
     }
 
-    public async Task<SimpleVerification> VerifyQueueDrainAsync(HealthCheckSeedSnapshot snapshot, CancellationToken ct)
-    {
-        var peekSpec = new QuerySpec(
-            OperationNames.Central.EventsPeek,
-            new Dictionary<string, object?>
-            {
-                ["p_limit"] = Math.Max(snapshot.Expectations.Count * 5, 20)
-            });
-
-        var rows = await _storage.ExecuteQueryAsync<Dictionary<string, object?>>(peekSpec, ct);
-        var leftovers = rows
-            .Select(r => (Row: r, AssetCode: TryReadAssetCode(r)))
-            .Where(tuple => tuple.AssetCode != null && snapshot.AssetCodes.Contains(tuple.AssetCode))
-            .ToList();
-
-        if (leftovers.Count == 0)
-        {
-            return SimpleVerification.Ok();
-        }
-
-        var builder = new StringBuilder();
-        builder.Append("Unprocessed measurement events remain for assets: ");
-        builder.Append(string.Join(", ", leftovers.Select(l =>
-        {
-            var id = l.Row.TryGetValue("id", out var value) ? value?.ToString() : "?";
-            return $"{l.AssetCode} (event #{id})";
-        })));
-        builder.Append(". TODO: auto-create missing queue cleanup when provisioning is automated.");
-        return SimpleVerification.Fail(builder.ToString());
-    }
-
     public void PrintAnalyticsTable(IEnumerable<AssetAnalyticsRow> rows)
     {
         Console.WriteLine("Актив            | CR ожидаемый | CR фактический | Риск (ож/факт) | Обновлено");
@@ -367,42 +310,22 @@ internal sealed class CentralHealthCheckScenario
         await _storage.ExecuteCommandAsync(spec, ct);
     }
 
-    private async Task EnqueueMeasurementAsync(AssetMeasurementSeed seed, CancellationToken ct)
+    private async Task InsertMeasurementBatchAsync(AssetMeasurementSeed seed, CancellationToken ct)
     {
-        var payload = JsonSerializer.Serialize(new
-        {
-            asset_code = seed.AssetCode,
-            prev_thk = seed.PrevThickness,
-            prev_date = seed.PrevDateUtc,
-            last_thk = seed.LastThickness,
-            last_date = seed.LastDateUtc
-        });
-
-        var spec = new CommandSpec(
-            OperationNames.Central.EventsEnqueue,
-            new Dictionary<string, object?>
-            {
-                ["p_event_type"] = EventType,
-                ["p_source_plant"] = seed.PlantCode,
-                ["p_payload"] = payload
-            });
-
-        await _storage.ExecuteCommandAsync(spec, ct);
-    }
-
-    private async Task DrainEventsAsync(CancellationToken ct)
-    {
-        // Run ingestion several times to ensure all enqueued events are processed (queue might have foreign items).
-        for (var attempt = 0; attempt < 3; attempt++)
-        {
-            var spec = new CommandSpec(
-                OperationNames.Central.EventsIngest,
-                new Dictionary<string, object?> { ["p_limit"] = 5000 });
-
-            var processed = await _storage.ExecuteCommandAsync(spec, ct);
-            Console.WriteLine($"[Посев] Попытка инжеста {attempt + 1}: обработано {processed} событий");
-            if (processed == 0) break;
-        }
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            insert into public.measurement_batches(source_plant, asset_code, prev_thk, prev_date, last_thk, last_date)
+            values (@plant, @asset, @prev_thk, @prev_date, @last_thk, @last_date);
+            """;
+        cmd.Parameters.AddWithValue("@plant", seed.PlantCode);
+        cmd.Parameters.AddWithValue("@asset", seed.AssetCode);
+        cmd.Parameters.AddWithValue("@prev_thk", seed.PrevThickness);
+        cmd.Parameters.AddWithValue("@prev_date", seed.PrevDateUtc);
+        cmd.Parameters.AddWithValue("@last_thk", seed.LastThickness);
+        cmd.Parameters.AddWithValue("@last_date", seed.LastDateUtc);
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     private static decimal CalculateCorrosionRate(AssetMeasurementSeed seed)
@@ -474,31 +397,6 @@ internal sealed class CentralHealthCheckScenario
         };
     }
 
-    private static string? TryReadAssetCode(Dictionary<string, object?> row)
-    {
-        if (!row.TryGetValue("payload_json", out var payload) || payload == null)
-            return null;
-
-        try
-        {
-            if (payload is string s)
-            {
-                using var doc = JsonDocument.Parse(s);
-                return doc.RootElement.TryGetProperty("asset_code", out var prop) ? prop.GetString() : null;
-            }
-
-            if (payload is JsonElement element)
-            {
-                return element.TryGetProperty("asset_code", out var prop) ? prop.GetString() : null;
-            }
-        }
-        catch
-        {
-            return null;
-        }
-
-        return null;
-    }
 }
 
 internal sealed record AssetSummarySnapshot(string AssetCode, string? RiskLevel, DateTime? UpdatedAt, string RawJson)

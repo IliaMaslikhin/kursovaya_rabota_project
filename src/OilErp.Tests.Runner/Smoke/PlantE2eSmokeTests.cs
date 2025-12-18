@@ -2,7 +2,6 @@ using System;
 using System.Threading.Tasks;
 using Npgsql;
 using OilErp.Core.Dto;
-using OilErp.Core.Services.Central;
 using OilErp.Core.Util;
 using OilErp.Tests.Runner.Util;
 using AnpzInsertService = OilErp.Core.Services.Plants.ANPZ.SpInsertMeasurementBatchService;
@@ -11,7 +10,7 @@ using KrnpzInsertService = OilErp.Core.Services.Plants.KRNPZ.SpInsertMeasurement
 namespace OilErp.Tests.Runner.Smoke;
 
 /// <summary>
-/// E2E-проверки: завод → central ingest → analytics_cr и очистка очереди.
+/// E2E-проверки: завод → FDW insert в central → обновление analytics_cr (без очереди/ingest).
 /// </summary>
 public class PlantE2eSmokeTests
 {
@@ -36,13 +35,12 @@ public class PlantE2eSmokeTests
     };
 
     /// <summary>
-    /// Проверяет, что события с заводов обновляют analytics_cr и не остаются в очереди.
+    /// Проверяет, что батчи с заводов попадают в central.measurement_batches и обновляют analytics_cr.
     /// </summary>
     public async Task<TestResult> TestPlantEventsReachAnalytics()
     {
         const string testName = "Plant_Events_Reach_Analytics";
         var centralConfig = TestEnvironment.LoadStorageConfig(DatabaseProfile.Central);
-        var centralStorage = TestEnvironment.CreateStorageAdapter(DatabaseProfile.Central);
 
         var processedPlants = 0;
 
@@ -76,21 +74,18 @@ public class PlantE2eSmokeTests
                 return new TestResult(testName, false, $"Завод {plant.PlantCode}: вставка не прошла ({ex.Message})");
             }
 
-            // 2) убеждаемся, что событие попало в inbox
-            var eventExists = await HasInboxEventAsync(centralConfig.ConnectionString, assetCode);
-            if (!eventExists)
+            // 2) убеждаемся, что запись попала в central.measurement_batches
+            var batchExists = await HasMeasurementBatchAsync(centralConfig.ConnectionString, assetCode, plant.PlantCode);
+            if (!batchExists)
             {
                 await CleanupCentralAsync(centralConfig.ConnectionString, assetCode);
                 await CleanupPlantAsync(plant, assetCode);
-                return new TestResult(testName, false, $"Событие не попало в inbox для {plant.PlantCode}");
+                return new TestResult(testName, false, $"Батч не попал в central.measurement_batches для {plant.PlantCode}");
             }
 
-            // 3) ingest и проверки
+            // 3) проверяем, что analytics_cr обновилась триггером central
             try
             {
-                var ingest = new FnIngestEventsService(centralStorage);
-                await ingest.fn_ingest_eventsAsync(100, CancellationToken.None);
-
                 var analyticsUpdated = await HasAnalyticsAsync(centralConfig.ConnectionString, assetCode);
                 if (!analyticsUpdated)
                 {
@@ -98,20 +93,12 @@ public class PlantE2eSmokeTests
                     await CleanupPlantAsync(plant, assetCode);
                     return new TestResult(testName, false, $"analytics_cr не обновилась для {assetCode}");
                 }
-
-                var queueClean = await IsQueueCleanAsync(centralConfig.ConnectionString, assetCode);
-                if (!queueClean)
-                {
-                    await CleanupCentralAsync(centralConfig.ConnectionString, assetCode);
-                    await CleanupPlantAsync(plant, assetCode);
-                    return new TestResult(testName, false, $"Очередь не очищена для {assetCode}");
-                }
             }
             catch (Exception ex)
             {
                 await CleanupCentralAsync(centralConfig.ConnectionString, assetCode);
                 await CleanupPlantAsync(plant, assetCode);
-                return new TestResult(testName, false, $"Ошибка ingest для {plant.PlantCode}: {ex.Message}");
+                return new TestResult(testName, false, $"Ошибка проверки central для {plant.PlantCode}: {ex.Message}");
             }
 
             await CleanupCentralAsync(centralConfig.ConnectionString, assetCode);
@@ -126,13 +113,14 @@ public class PlantE2eSmokeTests
         return new TestResult(testName, true);
     }
 
-    private static async Task<bool> HasInboxEventAsync(string connString, string assetCode)
+    private static async Task<bool> HasMeasurementBatchAsync(string connString, string assetCode, string plantCode)
     {
         await using var conn = new NpgsqlConnection(connString);
         await conn.OpenAsync();
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"select 1 from public.events_inbox where payload_json->>'asset_code' = @asset limit 1";
+        cmd.CommandText = @"select 1 from public.measurement_batches where asset_code = @asset and upper(source_plant) = upper(@plant) limit 1";
         cmd.Parameters.AddWithValue("@asset", assetCode);
+        cmd.Parameters.AddWithValue("@plant", plantCode);
         var result = await cmd.ExecuteScalarAsync();
         return result != null;
     }
@@ -151,17 +139,6 @@ public class PlantE2eSmokeTests
         return lastThk.HasValue && lastDate.HasValue;
     }
 
-    private static async Task<bool> IsQueueCleanAsync(string connString, string assetCode)
-    {
-        await using var conn = new NpgsqlConnection(connString);
-        await conn.OpenAsync();
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"select count(*) from public.events_inbox where payload_json->>'asset_code' = @asset and processed_at is null";
-        cmd.Parameters.AddWithValue("@asset", assetCode);
-        var count = (long)await cmd.ExecuteScalarAsync();
-        return count == 0;
-    }
-
     private static async Task CleanupCentralAsync(string connString, string assetCode)
     {
         await using var conn = new NpgsqlConnection(connString);
@@ -171,7 +148,7 @@ public class PlantE2eSmokeTests
         await using (var cmd = conn.CreateCommand())
         {
             cmd.Transaction = tx;
-            cmd.CommandText = "delete from public.events_inbox where payload_json->>'asset_code' = @asset";
+            cmd.CommandText = "delete from public.measurement_batches where asset_code = @asset";
             cmd.Parameters.AddWithValue("@asset", assetCode);
             await cmd.ExecuteNonQueryAsync();
         }

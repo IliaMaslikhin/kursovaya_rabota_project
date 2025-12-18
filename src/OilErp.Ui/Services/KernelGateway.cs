@@ -20,13 +20,21 @@ public sealed class KernelGateway
 {
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(3);
 
-    private KernelGateway(IStoragePort storage, bool isLive, DatabaseProfile targetProfile, string statusMessage, BootstrapResult? bootstrapInfo, StorageConfig? storageConfig)
+    private KernelGateway(
+        IStoragePort storage,
+        bool isLive,
+        DatabaseProfile targetProfile,
+        string statusMessage,
+        string actualDatabase,
+        BootstrapResult? bootstrapInfo,
+        StorageConfig? storageConfig)
     {
         Storage = storage;
         StorageFactory = new StoragePortFactory(storage);
         IsLive = isLive;
         TargetProfile = targetProfile;
         StatusMessage = statusMessage;
+        ActualDatabase = actualDatabase;
         BootstrapInfo = bootstrapInfo;
         StorageConfig = storageConfig;
     }
@@ -39,6 +47,8 @@ public sealed class KernelGateway
     public DatabaseProfile TargetProfile { get; }
 
     public string StatusMessage { get; }
+
+    public string ActualDatabase { get; }
 
     public BootstrapResult? BootstrapInfo { get; }
 
@@ -61,17 +71,18 @@ public sealed class KernelGateway
         }
 
         var storage = new StorageAdapter(config);
-        ValidateConnection(storage, config.ConnectionString, targetProfile);
-        var okStatus = BuildSuccessStatus(bootstrap, targetProfile);
+        var actualDatabase = ValidateConnection(storage, config.ConnectionString, targetProfile);
+        var okStatus = BuildSuccessStatus(bootstrap, actualDatabase);
         AppLogger.Info($"[ui] storage ready: {okStatus}");
-        return new KernelGateway(storage, true, targetProfile, okStatus, bootstrap, config);
+        return new KernelGateway(storage, true, targetProfile, okStatus, actualDatabase, bootstrap, config);
     }
 
-    private static string BuildSuccessStatus(BootstrapResult bootstrap, DatabaseProfile targetProfile)
+    private static string BuildSuccessStatus(BootstrapResult bootstrap, string actualDatabase)
     {
+        var dbDisplay = FormatDatabaseDisplayName(actualDatabase);
         var firstRun = bootstrap.IsFirstRun ? " · первичный запуск" : string.Empty;
         var guideHint = string.IsNullOrWhiteSpace(bootstrap.GuidePath) ? string.Empty : $" · гайд: {bootstrap.GuidePath}";
-        return $"Подключено ({targetProfile}) · код {bootstrap.MachineCode}{firstRun}{guideHint}";
+        return $"Подключено ({dbDisplay}) · код {bootstrap.MachineCode}{firstRun}{guideHint}";
     }
 
     private static string BuildFailureStatus(BootstrapResult bootstrap)
@@ -81,22 +92,24 @@ public sealed class KernelGateway
         return $"БД не готова: {bootstrap.ErrorMessage ?? "не удалось инициализировать БД"}{codeHint}{guideHint}";
     }
 
-    private static void ValidateConnection(IStoragePort storage, string connectionString, DatabaseProfile targetProfile)
+    private static string ValidateConnection(IStoragePort storage, string connectionString, DatabaseProfile targetProfile)
     {
         // baseline connectivity check
+        string actualDatabase;
         using (var conn = new NpgsqlConnection(connectionString))
         {
             conn.Open();
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = "select 1";
-            var ok = cmd.ExecuteScalar();
-            if (ok is null) throw new InvalidOperationException("DB ping returned NULL.");
+            cmd.CommandText = "select current_database()";
+            actualDatabase = (cmd.ExecuteScalar()?.ToString() ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(actualDatabase))
+                throw new InvalidOperationException("DB ping returned empty current_database().");
         }
 
         if (targetProfile != DatabaseProfile.Central)
         {
             AppLogger.Info($"[ui] проверка подключения прошла успешно profile={targetProfile}");
-            return;
+            return actualDatabase;
         }
 
         var spec = new QuerySpec(
@@ -117,6 +130,7 @@ public sealed class KernelGateway
         if (rows[0] is not decimal and not double and not float)
             throw new InvalidOperationException($"fn_calc_cr ожидался decimal, но получено {rows[0].GetType().Name}");
         AppLogger.Info("[ui] проверка fn_calc_cr прошла успешно");
+        return actualDatabase;
     }
 
     private static string NormalizeTargetDatabase(string connectionString, DatabaseProfile profile)
@@ -124,13 +138,16 @@ public sealed class KernelGateway
         try
         {
             var b = new NpgsqlConnectionStringBuilder(connectionString);
-            b.Database = profile switch
+            if (string.IsNullOrWhiteSpace(b.Database))
             {
-                DatabaseProfile.Central => "central",
-                DatabaseProfile.PlantAnpz => "anpz",
-                DatabaseProfile.PlantKrnpz => "krnpz",
-                _ => b.Database
-            };
+                b.Database = profile switch
+                {
+                    DatabaseProfile.Central => "central",
+                    DatabaseProfile.PlantAnpz => "anpz",
+                    DatabaseProfile.PlantKrnpz => "krnpz",
+                    _ => b.Database
+                };
+            }
             return b.ConnectionString;
         }
         catch
@@ -149,5 +166,17 @@ public sealed class KernelGateway
             "0" or "false" or "no" or "off" => false,
             _ => false
         };
+    }
+
+    private static string FormatDatabaseDisplayName(string databaseName)
+    {
+        if (string.IsNullOrWhiteSpace(databaseName)) return "?";
+
+        var raw = databaseName.Trim();
+        var upper = raw.ToUpperInvariant();
+        if (upper.Contains("ANPZ")) return "ANPZ";
+        if (upper.Contains("KRNPZ") || upper.Contains("KNPZ")) return "KNPZ";
+        if (upper.Contains("CENTRAL")) return "Central";
+        return raw;
     }
 }

@@ -1,0 +1,31 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OilErp.Ui.ViewModels"
+        x:Class="OilErp.Ui.Views.ConfirmDialogWindow"
+        x:DataType="vm:ConfirmDialogViewModel"
+        Width="520"
+        Height="220"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="{Binding Title}">
+
+    <Grid RowDefinitions="*,Auto"
+          Margin="18"
+          RowSpacing="12">
+        <TextBlock Text="{Binding Message}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource Brush.TextPrimary}"/>
+
+        <StackPanel Grid.Row="1"
+                    Orientation="Horizontal"
+                    Spacing="10"
+                    HorizontalAlignment="Right">
+            <Button Content="{Binding CancelText}"
+                    Command="{Binding CancelCommand}"/>
+            <Button Content="{Binding ConfirmText}"
+                    Classes="primary"
+                    Command="{Binding ConfirmCommand}"/>
+        </StackPanel>
+    </Grid>
+</Window>
+

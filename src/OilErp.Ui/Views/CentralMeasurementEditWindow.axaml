@@ -3,8 +3,8 @@
         xmlns:vm="using:OilErp.Ui.ViewModels"
         x:Class="OilErp.Ui.Views.CentralMeasurementEditWindow"
         x:DataType="vm:CentralMeasurementEditWindowViewModel"
-        Width="460"
-        Height="320"
+        Width="520"
+        Height="460"
         CanResize="False"
         WindowStartupLocation="CenterOwner"
         Title="{Binding Title}">
@@ -19,8 +19,6 @@
                        Foreground="{DynamicResource Brush.TextPrimary}"/>
             <TextBlock Text="{Binding EquipmentCode}"
                        Foreground="{DynamicResource Brush.TextSecondary}"/>
-            <TextBlock Text="Время замера: текущее (UTC)"
-                       Foreground="{DynamicResource Brush.TextSecondary}"/>
         </StackPanel>
 
         <Border Grid.Row="1"
@@ -30,8 +28,21 @@
                 BorderThickness="1"
                 CornerRadius="12">
             <StackPanel Spacing="10">
-                <TextBox Text="{Binding Thickness}"
-                         Watermark="Толщина"/>
+                <TextBox Text="{Binding DateText}"
+                         Watermark="Дата (например: 18.12.2025)"/>
+
+                <Grid ColumnDefinitions="*,*"
+                      ColumnSpacing="10">
+                    <TextBox Text="{Binding Label}"
+                             IsReadOnly="{Binding IsLabelReadOnly}"
+                             Watermark="Метка точки (label)"/>
+                    <TextBox Grid.Column="1"
+                             Text="{Binding ThicknessText}"
+                             Watermark="Толщина (например: 12.5)"/>
+                </Grid>
+
+                <TextBox Text="{Binding Note}"
+                         Watermark="Комментарий (опционально)"/>
 
                 <StackPanel Orientation="Horizontal"
                             Spacing="10"
@@ -39,6 +50,7 @@
                     <Button Content="Отмена"
                             Command="{Binding CancelCommand}"/>
                     <Button Content="Сохранить"
+                            Classes="primary"
                             Command="{Binding SaveCommand}"/>
                 </StackPanel>
 
@@ -49,4 +61,3 @@
         </Border>
     </Grid>
 </Window>
-

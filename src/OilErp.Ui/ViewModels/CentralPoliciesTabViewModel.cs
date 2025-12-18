@@ -2,9 +2,11 @@ using System;
 using System.Collections.ObjectModel;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Npgsql;
+using NpgsqlTypes;
 using OilErp.Bootstrap;
 using OilErp.Core.Contracts;
 using OilErp.Core.Services.Central;
@@ -17,6 +19,8 @@ public sealed partial class CentralPoliciesTabViewModel : ObservableObject
 {
     private readonly IStoragePort storage;
     private readonly string connectionString;
+    private readonly DispatcherTimer filterDebounceTimer;
+    private bool filterRefreshPending;
 
     public CentralPoliciesTabViewModel(IStoragePort storage, string connectionString)
     {
@@ -24,11 +28,22 @@ public sealed partial class CentralPoliciesTabViewModel : ObservableObject
         this.connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
         Items = new ObservableCollection<PolicyItemViewModel>();
         statusMessage = "Загрузите список политик.";
+
+        filterDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
+        filterDebounceTimer.Tick += async (_, _) =>
+        {
+            filterDebounceTimer.Stop();
+            if (IsBusy || !filterRefreshPending) return;
+            filterRefreshPending = false;
+            await RefreshAsync();
+        };
     }
 
     public ObservableCollection<PolicyItemViewModel> Items { get; }
 
     [ObservableProperty] private PolicyItemViewModel? selectedItem;
+
+    [ObservableProperty] private string filterText = string.Empty;
 
     [ObservableProperty] private bool isBusy;
     [ObservableProperty] private string statusMessage;
@@ -38,6 +53,12 @@ public sealed partial class CentralPoliciesTabViewModel : ObservableObject
         AddCommand.NotifyCanExecuteChanged();
         EditCommand.NotifyCanExecuteChanged();
         DeleteCommand.NotifyCanExecuteChanged();
+
+        if (!value && filterRefreshPending)
+        {
+            filterDebounceTimer.Stop();
+            filterDebounceTimer.Start();
+        }
     }
 
     partial void OnSelectedItemChanged(PolicyItemViewModel? value)
@@ -53,6 +74,13 @@ public sealed partial class CentralPoliciesTabViewModel : ObservableObject
 
         EditCommand.NotifyCanExecuteChanged();
         DeleteCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnFilterTextChanged(string value)
+    {
+        filterRefreshPending = true;
+        filterDebounceTimer.Stop();
+        filterDebounceTimer.Start();
     }
 
     private bool CanOpenDialog() => !IsBusy;
@@ -84,9 +112,12 @@ public sealed partial class CentralPoliciesTabViewModel : ObservableObject
             cmd.CommandText = """
                 select name, threshold_low, threshold_med, threshold_high
                 from public.risk_policies
+                where @q is null
+                   or name ilike @q
                 order by name
                 limit 200
                 """;
+            cmd.Parameters.Add("q", NpgsqlDbType.Text).Value = string.IsNullOrWhiteSpace(FilterText) ? DBNull.Value : $"%{FilterText.Trim()}%";
             await using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
@@ -108,6 +139,13 @@ public sealed partial class CentralPoliciesTabViewModel : ObservableObject
         {
             IsBusy = false;
         }
+    }
+
+    [RelayCommand]
+    private async Task ClearFilterAsync()
+    {
+        FilterText = string.Empty;
+        await RefreshAsync();
     }
 
     [RelayCommand(CanExecute = nameof(CanOpenDialog))]

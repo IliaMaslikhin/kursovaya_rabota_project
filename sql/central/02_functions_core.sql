@@ -41,66 +41,7 @@ BEGIN
   RETURN v_id;
 END$$;
 
--- 3) enqueue event
-CREATE OR REPLACE FUNCTION public.fn_events_enqueue(
-  p_event_type   text,
-  p_source_plant text,
-  p_payload      jsonb
-) RETURNS bigint
-LANGUAGE plpgsql
-AS $$
-DECLARE v_id bigint;
-BEGIN
-  CALL public.sp_events_enqueue(p_event_type, p_source_plant, p_payload, v_id);
-  RETURN v_id;
-END$$;
-
--- 4) peek
-CREATE OR REPLACE FUNCTION public.fn_events_peek(p_limit int DEFAULT 100)
-RETURNS TABLE(id bigint, event_type text, source_plant text, payload_json jsonb, created_at timestamptz)
-LANGUAGE sql
-AS $$
-  SELECT id, event_type, source_plant, payload_json, created_at
-  FROM public.events_inbox
-  WHERE processed_at IS NULL
-  ORDER BY id
-  LIMIT GREATEST(1, p_limit);
-$$;
-
--- 5) ingest batch
-CREATE OR REPLACE FUNCTION public.fn_ingest_events(p_limit int DEFAULT 1000)
-RETURNS integer
-LANGUAGE plpgsql
-AS $$
-DECLARE processed int := 0;
-BEGIN
-  CALL public.sp_ingest_events(p_limit, processed);
-  RETURN processed;
-END$$;
-
--- 6) requeue
-CREATE OR REPLACE FUNCTION public.fn_events_requeue(p_ids bigint[])
-RETURNS integer
-LANGUAGE plpgsql
-AS $$
-DECLARE n int;
-BEGIN
-  CALL public.sp_events_requeue(p_ids, n);
-  RETURN n;
-END$$;
-
--- 7) cleanup
-CREATE OR REPLACE FUNCTION public.fn_events_cleanup(p_older_than interval DEFAULT '30 days')
-RETURNS integer
-LANGUAGE plpgsql
-AS $$
-DECLARE n int;
-BEGIN
-  CALL public.sp_events_cleanup(p_older_than, n);
-  RETURN n;
-END$$;
-
--- 8) eval risk
+-- 3) eval risk
 CREATE OR REPLACE FUNCTION public.fn_eval_risk(
   p_asset_code  text,
   p_policy_name text DEFAULT 'default'

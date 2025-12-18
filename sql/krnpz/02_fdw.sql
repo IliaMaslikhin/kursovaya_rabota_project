@@ -20,17 +20,21 @@ END$$;
 
 CREATE SCHEMA IF NOT EXISTS central_ft AUTHORIZATION CURRENT_USER;
 
-DROP FOREIGN TABLE IF EXISTS central_ft.events_inbox;
-CREATE FOREIGN TABLE central_ft.events_inbox (
-  id           BIGINT,
-  event_type   TEXT,
+DROP FOREIGN TABLE IF EXISTS central_ft.measurement_batches;
+CREATE FOREIGN TABLE central_ft.measurement_batches (
+  -- Важно: не включаем identity/default колонки (id/created_at).
+  -- postgres_fdw не знает remote DEFAULT и может отправить NULL, ломая INSERT.
   source_plant TEXT,
-  payload_json JSONB,
-  created_at   TIMESTAMPTZ,
-  processed_at TIMESTAMPTZ
+  asset_code   TEXT,
+  prev_thk     NUMERIC,
+  prev_date    TIMESTAMPTZ,
+  last_thk     NUMERIC,
+  last_date    TIMESTAMPTZ,
+  last_label   TEXT,
+  last_note    TEXT
 )
 SERVER central_srv
-OPTIONS (schema_name 'public', table_name 'events_inbox');
+OPTIONS (schema_name 'public', table_name 'measurement_batches');
 
 -- If central needs explicit creds, use:
 -- CREATE USER MAPPING IF NOT EXISTS FOR CURRENT_USER SERVER central_srv

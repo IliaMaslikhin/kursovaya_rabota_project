@@ -2,150 +2,79 @@
 
 -- При изменении OUT-параметров PostgreSQL не позволяет CREATE OR REPLACE.
 -- Чтобы автосинхронизация могла обновлять БД со старых версий, удаляем старые варианты процедур.
+-- Убираем старую модель очереди событий (events_inbox + ingest/notify).
+DROP FUNCTION IF EXISTS public.fn_events_enqueue(text, text, jsonb);
+DROP FUNCTION IF EXISTS public.fn_events_peek(int);
+DROP FUNCTION IF EXISTS public.fn_ingest_events(int);
+DROP FUNCTION IF EXISTS public.fn_events_requeue(bigint[]);
+DROP FUNCTION IF EXISTS public.fn_events_cleanup(interval);
+
 DROP PROCEDURE IF EXISTS public.sp_ingest_events(integer);
 DROP PROCEDURE IF EXISTS public.sp_events_enqueue(text, text, jsonb);
 DROP PROCEDURE IF EXISTS public.sp_events_requeue(bigint[]);
 DROP PROCEDURE IF EXISTS public.sp_events_cleanup(interval);
+
+DROP TABLE IF EXISTS public.events_inbox;
+
 DROP PROCEDURE IF EXISTS public.sp_policy_upsert(text, numeric, numeric, numeric);
 DROP PROCEDURE IF EXISTS public.sp_asset_upsert(text, text, text, text);
 
-CREATE OR REPLACE PROCEDURE public.sp_ingest_events(
-  IN p_limit int,
-  OUT processed int)
+-- Прямые вставки батчей замеров из заводов (public.measurement_batches)
+-- автоматически обновляют справочник и аналитику.
+DROP FUNCTION IF EXISTS public.trg_measurement_batches_bi_fn();
+
+CREATE OR REPLACE FUNCTION public.trg_measurement_batches_bi_fn()
+RETURNS trigger
 LANGUAGE plpgsql
 AS $$
+DECLARE
+  v_asset_code text;
+  v_source     text;
 BEGIN
-  processed := 0;
+  v_asset_code := NULLIF(trim(NEW.asset_code), '');
+  IF v_asset_code IS NULL THEN
+    RAISE EXCEPTION 'asset_code is required';
+  END IF;
+  NEW.asset_code := v_asset_code;
 
-  -- discard/close out any unexpected event types so they don't block the queue
-  UPDATE public.events_inbox
-  SET processed_at = now()
-  WHERE processed_at IS NULL
-    AND event_type IS DISTINCT FROM 'HC_MEASUREMENT_BATCH';
+  v_source := NULLIF(trim(NEW.source_plant), '');
+  IF v_source IS NULL THEN
+    RAISE EXCEPTION 'source_plant is required';
+  END IF;
+  NEW.source_plant := v_source;
 
-  WITH cte AS (
-    SELECT id, source_plant, payload_json
-    FROM public.events_inbox
-    WHERE processed_at IS NULL
-      AND event_type = 'HC_MEASUREMENT_BATCH'
-      AND payload_json ? 'asset_code'
-      AND NULLIF(trim(payload_json->>'asset_code'), '') IS NOT NULL
-    ORDER BY id
-    LIMIT GREATEST(1, p_limit)
-    FOR UPDATE SKIP LOCKED
-  ),
-  parsed AS (
-    SELECT
-      c.id,
-      c.source_plant,
-      NULLIF(trim(c.payload_json->>'asset_code'), '') AS asset_code,
-      CASE WHEN jsonb_typeof(c.payload_json->'prev_thk') IN ('number','string')
-           THEN NULLIF(c.payload_json->>'prev_thk','')::numeric END AS prev_thk,
-      CASE WHEN NULLIF(c.payload_json->>'prev_date','') IS NOT NULL
-           THEN (c.payload_json->>'prev_date')::timestamptz END AS prev_date,
-      CASE WHEN jsonb_typeof(c.payload_json->'last_thk') IN ('number','string')
-           THEN NULLIF(c.payload_json->>'last_thk','')::numeric END AS last_thk,
-      CASE WHEN NULLIF(c.payload_json->>'last_date','') IS NOT NULL
-           THEN (c.payload_json->>'last_date')::timestamptz END AS last_date
-    FROM cte c
-  ),
-  upsert_assets AS (
-    INSERT INTO public.assets_global(asset_code, name, type, plant_code)
-    SELECT DISTINCT asset_code, asset_code, NULL, source_plant
-    FROM parsed
-    WHERE asset_code IS NOT NULL
-    ON CONFLICT (asset_code) DO NOTHING
-    RETURNING 1
-  ),
-  upsert_cr AS (
-    INSERT INTO public.analytics_cr(asset_code, prev_thk, prev_date, last_thk, last_date, cr, updated_at)
-    SELECT
-      p.asset_code,
-      p.prev_thk, p.prev_date,
-      p.last_thk, p.last_date,
-      public.fn_calc_cr(p.prev_thk, p.prev_date, p.last_thk, p.last_date),
-      now()
-    FROM parsed p
-    WHERE p.asset_code IS NOT NULL
-      AND p.last_thk IS NOT NULL
-      AND p.last_date IS NOT NULL
-      AND (p.prev_date IS NULL OR p.last_date IS NULL OR p.prev_date <= p.last_date)
-      AND (p.prev_thk IS NULL OR p.last_thk IS NULL OR p.prev_thk >= p.last_thk)
-    ON CONFLICT (asset_code) DO UPDATE
-      SET prev_thk   = EXCLUDED.prev_thk,
-          prev_date  = EXCLUDED.prev_date,
-          last_thk   = EXCLUDED.last_thk,
-          last_date  = EXCLUDED.last_date,
-          cr         = EXCLUDED.cr,
-          updated_at = now()
-    RETURNING 1
+  -- ensure asset exists for FK (measurement_batches -> assets_global / analytics_cr -> assets_global)
+  INSERT INTO public.assets_global(asset_code, name, type, plant_code)
+  VALUES (NEW.asset_code, NEW.asset_code, NULL, NEW.source_plant)
+  ON CONFLICT (asset_code) DO UPDATE
+    SET plant_code = COALESCE(EXCLUDED.plant_code, public.assets_global.plant_code);
+
+  -- upsert analytics snapshot
+  INSERT INTO public.analytics_cr(asset_code, prev_thk, prev_date, last_thk, last_date, cr, updated_at)
+  VALUES (
+    NEW.asset_code,
+    NEW.prev_thk,
+    NEW.prev_date,
+    NEW.last_thk,
+    NEW.last_date,
+    public.fn_calc_cr(NEW.prev_thk, NEW.prev_date, NEW.last_thk, NEW.last_date),
+    now()
   )
-  UPDATE public.events_inbox e
-  SET processed_at = now()
-  FROM cte
-  WHERE e.id = cte.id;
+  ON CONFLICT (asset_code) DO UPDATE
+    SET prev_thk   = EXCLUDED.prev_thk,
+        prev_date  = EXCLUDED.prev_date,
+        last_thk   = EXCLUDED.last_thk,
+        last_date  = EXCLUDED.last_date,
+        cr         = EXCLUDED.cr,
+        updated_at = now();
 
-  GET DIAGNOSTICS processed = ROW_COUNT;
-  PERFORM pg_notify('events_ingest', jsonb_build_object('processed', processed, 'ts', now())::text);
+  RETURN NEW;
 END$$;
 
-CREATE OR REPLACE PROCEDURE public.sp_events_enqueue(
-  IN p_event_type text,
-  IN p_source_plant text,
-  IN p_payload jsonb,
-  OUT p_id bigint)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  IF p_event_type IS NULL OR trim(p_event_type) = '' THEN
-    RAISE EXCEPTION 'event_type is required';
-  END IF;
-  IF p_event_type <> 'HC_MEASUREMENT_BATCH' THEN
-    RAISE EXCEPTION 'unsupported event_type: %', p_event_type;
-  END IF;
-
-  INSERT INTO public.events_inbox(event_type, source_plant, payload_json)
-  VALUES (p_event_type, p_source_plant, COALESCE(p_payload, '{}'::jsonb))
-  RETURNING id INTO p_id;
-
-  PERFORM pg_notify('events_enqueue', jsonb_build_object(
-    'id', p_id,
-    'event_type', p_event_type,
-    'source_plant', p_source_plant,
-    'ts', now())::text);
-END$$;
-
-CREATE OR REPLACE PROCEDURE public.sp_events_requeue(
-  IN p_ids bigint[],
-  OUT n int)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  UPDATE public.events_inbox SET processed_at = NULL WHERE id = ANY(p_ids);
-  GET DIAGNOSTICS n = ROW_COUNT;
-
-  PERFORM pg_notify('events_requeue', jsonb_build_object(
-    'count', n,
-    'ids', p_ids,
-    'ts', now())::text);
-END$$;
-
-CREATE OR REPLACE PROCEDURE public.sp_events_cleanup(
-  IN p_older_than interval,
-  OUT n int)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  DELETE FROM public.events_inbox
-  WHERE processed_at IS NOT NULL
-    AND processed_at < now() - p_older_than;
-  GET DIAGNOSTICS n = ROW_COUNT;
-
-  PERFORM pg_notify('events_cleanup', jsonb_build_object(
-    'count', n,
-    'older_than', p_older_than,
-    'ts', now())::text);
-END$$;
+DROP TRIGGER IF EXISTS trg_measurement_batches_bi ON public.measurement_batches;
+CREATE TRIGGER trg_measurement_batches_bi
+BEFORE INSERT ON public.measurement_batches
+FOR EACH ROW EXECUTE FUNCTION public.trg_measurement_batches_bi_fn();
 
 CREATE OR REPLACE PROCEDURE public.sp_policy_upsert(
   IN p_name text,

@@ -1,0 +1,175 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OilErp.Ui.ViewModels"
+        x:Class="OilErp.Ui.Views.CentralMeasurementHistoryWindow"
+        x:DataType="vm:CentralMeasurementHistoryWindowViewModel"
+        Width="820"
+        Height="560"
+        WindowStartupLocation="CenterOwner"
+        Title="{Binding Title}">
+
+    <Grid RowDefinitions="Auto,*,Auto"
+          Margin="18"
+          RowSpacing="12">
+        <StackPanel Spacing="4">
+            <TextBlock Text="CENTRAL"
+                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+            <TextBlock Text="{Binding AssetCode}"
+                       FontSize="18"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource Brush.TextPrimary}"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1"
+              RowDefinitions="Auto,Auto,*"
+              RowSpacing="10">
+            <StackPanel Orientation="Horizontal"
+                        Spacing="10">
+                <Button Content="Обновить"
+                        Command="{Binding RefreshCommand}"/>
+                <Border Width="1"
+                        Background="{DynamicResource Brush.Border}"
+                        Margin="4,0"/>
+                <Button Content="Экспорт CSV"
+                        Command="{Binding ExportCsvCommand}"/>
+                <Button Content="Экспорт JSON"
+                        Command="{Binding ExportJsonCommand}"/>
+                <Button Content="Экспорт XLSX"
+                        Command="{Binding ExportXlsxCommand}"/>
+                <Button Content="Импорт CSV"
+                        Command="{Binding ImportCsvCommand}"/>
+                <Button Content="Импорт JSON"
+                        Command="{Binding ImportJsonCommand}"/>
+                <ProgressBar IsIndeterminate="True"
+                             IsVisible="{Binding IsBusy}"
+                             Width="90"
+                             Height="4"
+                             VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding StatusMessage}"
+                           Foreground="{DynamicResource Brush.TextSecondary}"
+                           VerticalAlignment="Center"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+
+            <WrapPanel Grid.Row="1">
+                <WrapPanel.Styles>
+                    <Style Selector="WrapPanel > :is(Control)">
+                        <Setter Property="Margin" Value="0,0,10,10"/>
+                    </Style>
+                </WrapPanel.Styles>
+                <TextBox Width="240"
+                         Watermark="Поиск (завод/label/note)"
+                         Text="{Binding FilterText}"/>
+                <TextBox Width="220"
+                         Watermark="С даты (например: 2025-12-17)"
+                         Text="{Binding FromUtcText}"/>
+                <TextBox Width="220"
+                         Watermark="По дату (например: 2025-12-18)"
+                         Text="{Binding ToUtcText}"/>
+                <ComboBox Width="220"
+                          ItemsSource="{Binding SortOptions}"
+                          SelectedItem="{Binding SelectedSort}"/>
+                <CheckBox Content="Группировать по дню"
+                          IsChecked="{Binding GroupByDay}"/>
+            </WrapPanel>
+
+            <Border Grid.Row="2"
+                    Padding="10"
+                    Background="{DynamicResource Brush.PanelBackground}"
+                    BorderBrush="{DynamicResource Brush.Border}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                <Grid RowDefinitions="Auto,*"
+                      RowSpacing="8">
+                    <Border Padding="6,4"
+                            Background="{DynamicResource Brush.CardBackground}"
+                            BorderBrush="{DynamicResource Brush.Border}"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <Grid ColumnDefinitions="140,110,120,120,*"
+                              ColumnSpacing="10">
+                            <TextBlock Text="Дата"
+                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="Завод"
+                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                            <TextBlock Grid.Column="2"
+                                       Text="Label"
+                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                            <TextBlock Grid.Column="3"
+                                       Text="Толщина"
+                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                            <TextBlock Grid.Column="4"
+                                       Text="Комментарий"
+                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                        </Grid>
+                    </Border>
+
+                    <ListBox Grid.Row="1"
+                             ItemsSource="{Binding DisplayItems}"
+                             SelectedItem="{Binding SelectedEntry}"
+                             BorderBrush="{DynamicResource Brush.Border}"
+                             BorderThickness="1"
+                             Background="{DynamicResource Brush.PanelBackground}">
+                        <ListBox.Styles>
+                            <Style Selector="ListBoxItem">
+                                <Setter Property="Background" Value="{DynamicResource Brush.CardBackground}"/>
+                            </Style>
+                            <Style Selector="ListBoxItem:pointerover">
+                                <Setter Property="Background" Value="{DynamicResource Brush.PanelBackground}"/>
+                            </Style>
+                            <Style Selector="ListBoxItem:selected">
+                                <Setter Property="Background" Value="{DynamicResource Brush.AccentMuted}"/>
+                            </Style>
+                        </ListBox.Styles>
+                        <ListBox.DataTemplates>
+                            <DataTemplate x:DataType="vm:CentralMeasurementHistoryGroupHeaderViewModel">
+                                <Border Padding="10,8"
+                                        Background="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Background}"
+                                        BorderBrush="{DynamicResource Brush.Border}"
+                                        BorderThickness="0,0,0,1">
+                                    <TextBlock Text="{Binding Title}"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource Brush.TextPrimary}"/>
+                                </Border>
+                            </DataTemplate>
+                            <DataTemplate x:DataType="vm:CentralMeasurementHistoryItemViewModel">
+                                <Border Padding="10"
+                                        Background="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Background}"
+                                        BorderBrush="{DynamicResource Brush.Border}"
+                                        BorderThickness="0,0,0,1">
+                                    <Grid ColumnDefinitions="140,110,120,120,*"
+                                          ColumnSpacing="10">
+                                        <TextBlock Text="{Binding TimestampLocal}"
+                                                   Foreground="{DynamicResource Brush.TextPrimary}"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Plant}"
+                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding LabelDisplay}"
+                                                   Foreground="{DynamicResource Brush.TextPrimary}"/>
+                                        <TextBlock Grid.Column="3"
+                                                   Text="{Binding ThicknessDisplay}"
+                                                   Foreground="{DynamicResource Brush.TextPrimary}"/>
+                                        <TextBlock Grid.Column="4"
+                                                   Text="{Binding Note}"
+                                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                                   TextWrapping="NoWrap"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.DataTemplates>
+                    </ListBox>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <StackPanel Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+            <Button Content="Закрыть"
+                    Command="{Binding CloseCommand}"/>
+        </StackPanel>
+    </Grid>
+</Window>
+

@@ -16,13 +16,4 @@ public abstract class DbClientBase : IStoragePort
 
     /// <inheritdoc />
     public abstract Task<IStorageTransaction> BeginTransactionAsync(CancellationToken ct = default);
-
-    /// <inheritdoc />
-    public abstract Task SubscribeAsync(string channel, CancellationToken ct = default);
-
-    /// <inheritdoc />
-    public abstract Task UnsubscribeAsync(string channel, CancellationToken ct = default);
-
-    /// <inheritdoc />
-    public abstract event EventHandler<DbNotification>? Notified;
 }

@@ -1,25 +1,19 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using OilErp.Bootstrap;
-using OilErp.Core.Contracts;
-using OilErp.Core.Services.Central;
+using Npgsql;
 
 namespace OilErp.Ui.ViewModels;
 
 public sealed partial class AnalyticsPanelViewModel : ObservableObject
 {
-    private readonly IStoragePort storage;
+    private readonly string connectionString;
 
-    public AnalyticsPanelViewModel(IStoragePort storage)
+    public AnalyticsPanelViewModel(string connectionString)
     {
-        this.storage = storage;
+        this.connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
         Items = new ObservableCollection<AnalyticsRowViewModel>();
         statusMessage = "Нажмите «Обновить» для загрузки.";
     }
@@ -35,78 +29,104 @@ public sealed partial class AnalyticsPanelViewModel : ObservableObject
         await LoadAsync();
     }
 
-    [RelayCommand]
-    public async Task IngestAsync()
-    {
-        var sw = Stopwatch.StartNew();
-        try
-        {
-            IsBusy = true;
-            StatusMessage = "Запускаем сбор данных из заводов...";
-            var ingest = new FnIngestEventsService(storage);
-            var affected = await ingest.fn_ingest_eventsAsync(5000, CancellationToken.None);
-            StatusMessage = $"Сбор завершён, обработано {affected} событий. Обновляем аналитику...";
-            AppLogger.Info($"[ui] ingest events завершён, обработано {affected} за {sw.ElapsedMilliseconds} мс");
-            await LoadAsync();
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Ошибка сбора: {ex.Message}";
-            AppLogger.Error($"[ui] ingest ошибка: {ex.Message}");
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
     public async Task LoadAsync()
     {
-        var sw = Stopwatch.StartNew();
         try
         {
             IsBusy = true;
-            StatusMessage = "Загружаем аналитику из central...";
+            StatusMessage = "Загружаем аналитику (все заводы)...";
             Items.Clear();
-            var topService = new FnTopAssetsByCrService(storage);
-            var summaryService = new FnAssetSummaryJsonService(storage);
-            AppLogger.Info("[ui] analytics load start");
-            var rows = await topService.fn_top_assets_by_crAsync(100, CancellationToken.None);
 
-            foreach (var row in rows)
+            await using var conn = new NpgsqlConnection(connectionString);
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                              select
+                                src.asset_code,
+                                src.plant_code,
+                                src.cr,
+                                src.updated_at,
+                                src.risk
+                              from (
+                                with pol as (
+                                  select threshold_low, threshold_med, threshold_high
+                                  from public.risk_policies
+                                  where name = 'default'
+                                  limit 1
+                                ),
+                                last_batch as (
+                                  select distinct on (asset_code)
+                                    asset_code,
+                                    source_plant,
+                                    prev_thk,
+                                    prev_date,
+                                    last_thk,
+                                    last_date,
+                                    created_at
+                                  from public.measurement_batches
+                                  order by asset_code, last_date desc, id desc
+                                ),
+                                merged as (
+                                  select
+                                    coalesce(ag.asset_code, lb.asset_code) as asset_code,
+                                    coalesce(ag.plant_code, lb.source_plant) as plant_code,
+                                    coalesce(ac.cr, public.fn_calc_cr(lb.prev_thk, lb.prev_date, lb.last_thk, lb.last_date)) as cr,
+                                    coalesce(ac.updated_at, lb.created_at, ag.created_at) as updated_at,
+                                    pol.threshold_low,
+                                    pol.threshold_med,
+                                    pol.threshold_high
+                                  from public.assets_global ag
+                                  full join last_batch lb on lb.asset_code = ag.asset_code
+                                  left join public.analytics_cr ac on ac.asset_code = coalesce(ag.asset_code, lb.asset_code)
+                                  left join pol on true
+                                )
+                                select
+                                  asset_code,
+                                  plant_code,
+                                  cr,
+                                  updated_at,
+                                  case
+                                    when cr is null then '—'
+                                    when threshold_low is null and threshold_med is null and threshold_high is null then '—'
+                                    when threshold_high is not null and cr >= threshold_high then 'HIGH'
+                                    when threshold_med is not null and cr >= threshold_med then 'MEDIUM'
+                                    when threshold_low is not null and cr >= threshold_low then 'LOW'
+                                    else 'OK'
+                                  end as risk
+                                from merged
+                              ) src
+                              order by src.cr desc nulls last, src.updated_at desc nulls last, src.asset_code
+                              limit 300
+                              """;
+
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
             {
-                var asset = row.AssetCode ?? "UNKNOWN";
-                var cr = row.Cr;
-                var updatedAt = row.UpdatedAt;
-
-                string? risk = null;
-                string plant = "CENTRAL";
-                try
+                var asset = reader.GetString(0);
+                var plant = reader.IsDBNull(1) ? "—" : reader.GetString(1);
+                var cr = reader.IsDBNull(2) ? (decimal?)null : reader.GetFieldValue<decimal>(2);
+                DateTimeOffset? updatedAt = null;
+                if (!reader.IsDBNull(3))
                 {
-                    var summary = await summaryService.fn_asset_summary_jsonAsync(asset, "default", CancellationToken.None);
-                    plant = summary?.Asset.PlantCode ?? plant;
-                    risk = summary?.Risk?.Level;
+                    var dt = reader.GetFieldValue<DateTime>(3);
+                    if (dt.Kind == DateTimeKind.Unspecified) dt = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+                    updatedAt = new DateTimeOffset(dt).ToUniversalTime();
                 }
-                catch
-                {
-                    risk = null;
-                }
+                var risk = reader.IsDBNull(4) ? "—" : reader.GetString(4);
 
                 Items.Add(new AnalyticsRowViewModel(
                     asset,
-                    plant,
-                    cr?.ToString("0.0000") ?? "—",
+                    FormatPlant(plant),
+                    cr is null ? "—" : cr.Value.ToString("0.0000"),
                     risk ?? "—",
                     updatedAt?.ToString("u") ?? "—"));
             }
 
             StatusMessage = $"Загружено {Items.Count} строк.";
-            AppLogger.Info($"[ui] аналитика загружена rows={Items.Count} durMs={sw.ElapsedMilliseconds}");
         }
         catch (Exception ex)
         {
             StatusMessage = $"Ошибка загрузки аналитики: {ex.Message}";
-            AppLogger.Error($"[ui] аналитика ошибка: {ex.Message}");
         }
         finally
         {
@@ -114,13 +134,14 @@ public sealed partial class AnalyticsPanelViewModel : ObservableObject
         }
     }
 
-    private static string? Read(IReadOnlyDictionary<string, object?> row, string name)
+    private static string FormatPlant(string plant)
     {
-        if (row.TryGetValue(name, out var value) && value != null) return value.ToString();
-        var kvp = row.FirstOrDefault(p => string.Equals(p.Key, name, StringComparison.OrdinalIgnoreCase));
-        return kvp.Value?.ToString();
-    }
+        if (string.IsNullOrWhiteSpace(plant)) return "—";
 
+        var upper = plant.Trim().ToUpperInvariant();
+        if (upper == "KRNPZ") return "KNPZ";
+        return upper;
+    }
 }
 
 public sealed record AnalyticsRowViewModel(string AssetCode, string Plant, string CrDisplay, string Risk, string UpdatedAt);

@@ -12,6 +12,7 @@ public sealed class ThemePalette
         IBrush primaryTextBrush,
         IBrush secondaryTextBrush,
         IBrush accentBrush,
+        IBrush accentTextBrush,
         IBrush accentMutedBrush,
         IBrush criticalBrush)
     {
@@ -22,6 +23,7 @@ public sealed class ThemePalette
         PrimaryTextBrush = primaryTextBrush;
         SecondaryTextBrush = secondaryTextBrush;
         AccentBrush = accentBrush;
+        AccentTextBrush = accentTextBrush;
         AccentMutedBrush = accentMutedBrush;
         CriticalBrush = criticalBrush;
     }
@@ -40,6 +42,8 @@ public sealed class ThemePalette
 
     public IBrush AccentBrush { get; }
 
+    public IBrush AccentTextBrush { get; }
+
     public IBrush AccentMutedBrush { get; }
 
     public IBrush CriticalBrush { get; }
@@ -51,8 +55,9 @@ public sealed class ThemePalette
         new SolidColorBrush(Color.Parse("#1C1F29")),
         new SolidColorBrush(Color.Parse("#E9ECF5")),
         new SolidColorBrush(Color.Parse("#8A8EA0")),
-        new SolidColorBrush(Color.Parse("#22D3EE")),
-        new SolidColorBrush(Color.Parse("#0EA5E9")),
+        new SolidColorBrush(Color.Parse("#FFFFFF")),
+        new SolidColorBrush(Color.Parse("#000000")),
+        new SolidColorBrush(Color.Parse("#22FFFFFF")),
         new SolidColorBrush(Color.Parse("#F87171")));
 
     public static ThemePalette JetBrainsLight { get; } = new ThemePalette(
@@ -63,7 +68,8 @@ public sealed class ThemePalette
         new SolidColorBrush(Color.Parse("#1F2022")),
         new SolidColorBrush(Color.Parse("#5C6066")),
         new SolidColorBrush(Color.Parse("#0E7AFF")),
-        new SolidColorBrush(Color.Parse("#1D4ED8")),
+        new SolidColorBrush(Color.Parse("#FFFFFF")),
+        new SolidColorBrush(Color.Parse("#D6E8FF")),
         new SolidColorBrush(Color.Parse("#D92B2B")));
 
     // Legacy aliases to keep existing usages valid.

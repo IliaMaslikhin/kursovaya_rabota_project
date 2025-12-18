@@ -52,7 +52,7 @@ public class ProfilesSmoke
     }
 
     /// <summary>
-    /// Делает тестовый вызов заводской процедуры с откатом и проверяет доступность FDW таблицы central_ft.events_inbox.
+    /// Делает тестовый вызов заводской процедуры с откатом и проверяет доступность FDW таблицы central_ft.measurement_batches.
     /// </summary>
     public async Task<TestResult> TestPlantInsertAndFdwRoundtrip()
     {
@@ -81,12 +81,12 @@ public class ProfilesSmoke
                 await svcFn.sp_insert_measurement_batchAsync($"HC_FN_{plant.DefaultPlant}", json, plant.DefaultPlant, CancellationToken.None);
                 await svcPrc.sp_insert_measurement_batch_prcAsync($"HC_PRC_{plant.DefaultPlant}", json, plant.DefaultPlant, CancellationToken.None);
 
-                // ensure FDW central inbox reachable
+                // ensure FDW central table reachable
                 await using (var connPlant = new NpgsqlConnection(storageConfig.ConnectionString))
                 {
                     await connPlant.OpenAsync();
                     await using var cmd = connPlant.CreateCommand();
-                    cmd.CommandText = "select 1 from central_ft.events_inbox limit 1";
+                    cmd.CommandText = "select 1 from central_ft.measurement_batches limit 1";
                     await cmd.ExecuteScalarAsync();
                 }
 

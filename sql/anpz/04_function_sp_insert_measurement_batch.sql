@@ -30,11 +30,11 @@ BEGIN
            lbl
     FROM (
       SELECT
-        NULLIF(trim(x->>'label'),'') AS lbl,
-        (x->>'ts')::timestamptz AS ts,
-        NULLIF(x->>'thickness','')::numeric AS thk,
-        NULLIF(x->>'note','') AS note
-  FROM jsonb_array_elements(p_points) WITH ORDINALITY AS x(value, ordinality)
+        NULLIF(trim(x.value->>'label'),'') AS lbl,
+        (x.value->>'ts')::timestamptz AS ts,
+        NULLIF(x.value->>'thickness','')::numeric AS thk,
+        NULLIF(x.value->>'note','') AS note
+      FROM jsonb_array_elements(p_points) WITH ORDINALITY AS x(value, ordinality)
     ) s
     WHERE lbl IS NOT NULL
       AND ts IS NOT NULL

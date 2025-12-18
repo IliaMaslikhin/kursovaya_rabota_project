@@ -25,17 +25,14 @@ BEGIN
   FOR i IN 1..GREATEST(1, n_assets) LOOP
     asset_code := asset_prefix || '-' || lpad(i::text, 4, '0');
     FOR j IN 1..GREATEST(1, points_per_asset) LOOP
-      INSERT INTO public.events_inbox(event_type, source_plant, payload_json)
+      INSERT INTO public.measurement_batches(source_plant, asset_code, prev_thk, prev_date, last_thk, last_date)
       VALUES (
-        'HC_MEASUREMENT_BATCH',
         'ANPZ',
-        jsonb_build_object(
-          'asset_code', asset_code,
-          'prev_thk',  10.0 + i * 0.01,
-          'prev_date', base_ts + (j-1) * interval '1 day',
-          'last_thk',  10.0 + i * 0.01 - j * 0.02,
-          'last_date', base_ts + j * interval '1 day'
-        )
+        asset_code,
+        10.0 + i * 0.01,
+        base_ts + (j-1) * interval '1 day',
+        10.0 + i * 0.01 - j * 0.02,
+        base_ts + j * interval '1 day'
       );
     END LOOP;
   END LOOP;

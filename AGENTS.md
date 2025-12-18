@@ -1,8 +1,8 @@
 # OilErp Knowledge Brief (обновлено)
 
 ## 1. Назначение, архитектура, рантайм
-- **Цель**: учёт активов/коррозии, политики риска, приём событий от заводов (ANPZ, KRNPZ), аналитические SQL в центре.
-- **Топология**: PostgreSQL central + заводы (sql/), .NET ядро (`OilErp.Core` + `OilErp.Infrastructure`), смоук/CLI (`OilErp.Tests.Runner`), Avalonia UI (`OilErp.Ui`). Поток: заводская процедура → FDW `central_ft.events_inbox` → central ingest (`fn/sp_ingest_events`) → `analytics_cr`.
+- **Цель**: учёт активов/коррозии, политики риска, приём событий от заводов (ANPZ, KNPZ; в коде местами `KRNPZ`), аналитические SQL в центре.
+- **Топология**: PostgreSQL central + заводы (sql/), .NET ядро (`OilErp.Core` + `OilErp.Infrastructure`), смоук/CLI (`OilErp.Tests.Runner`), Avalonia UI (`OilErp.Ui`). Поток: заводская процедура → FDW `central_ft.measurement_batches` → central trigger `trg_measurement_batches_bi` → `assets_global` + `analytics_cr`.
 - **Операции**: перечислены в `src/OilErp.Core/Operations/OperationNames.cs`, карта в `src/OilErp.Infrastructure/Readme.Mapping.md`. Central функции делегируют в процедуры с OUT. Заводские события — `HC_MEASUREMENT_BATCH`.
 
 ## 2. Структура репозитория
@@ -14,14 +14,14 @@
 - `docs/`: архитектура, дизайн БД, гайд по запуску, актуальный план.
 
 ## 3. Поток данных и операции
-1) **Заводы**: `sp_insert_measurement_batch` валидирует точки и вызывает `sp_insert_measurement_batch_prc` → вставка локально + событие `HC_MEASUREMENT_BATCH` в central inbox (FDW).
-2) **Очередь центра**: `fn_events_enqueue/peek/requeue/cleanup`; ingest (`fn/sp_ingest_events`) берёт только `HC_MEASUREMENT_BATCH` с валидными датами/толщинами, считает CR, обновляет `analytics_cr`, ставит `processed_at`, шлёт `NOTIFY events_ingest`.
+1) **Заводы**: `sp_insert_measurement_batch` валидирует точки и вызывает `sp_insert_measurement_batch_prc` → вставка локально + snapshot-строка в central `public.measurement_batches` через FDW `central_ft.measurement_batches`.
+2) **Central**: триггер `public.trg_measurement_batches_bi_fn` (BEFORE INSERT) гарантирует наличие записи в `assets_global` и делает upsert в `analytics_cr` (CR считается через `fn_calc_cr`).
 3) **Аналитика**: `fn_top_assets_by_cr`, `fn_asset_summary_json`, `fn_eval_risk`, `fn_calc_cr`, `fn_plant_cr_stats`; агрегатор `PlantCrService`.
 4) **Риск/справочники**: `fn/sp_asset_upsert`, `fn/sp_policy_upsert` (фн делегируют в sp).
 5) **UI/CLI**: команды `add-asset/policy`, `add-measurements-anpz`, `events-*`, `summary/top-by-cr/eval-risk/plant-cr`, `watch`; UI отображает live CR/риск/диагностику LISTEN.
 
 ## 4. Сборка и проверка
-- Build: `dotnet build src/OilErp.sln -c Release` (warnings as errors).
+- Build (опционально): `dotnet build src/OilErp.sln -c Release` (может быть долгим; запускать по необходимости).
 - Smoke/CLI: `dotnet run --project src/OilErp.Tests.Runner` (меню) или команды через `--`.
 - UI: `dotnet run --project src/OilErp.Ui` (нужна БД; снапшоты только дополняют пустую БД).
 - SQL: применять в порядке (central 01→02→03; anpz/krnpz 01→02→03→04→05; 99 при нагрузке).
@@ -35,6 +35,9 @@
 - Подключение/транзакции/LISTEN/NOTIFY; ingest/очередь/аналитика; FDW ANPZ+KRNPZ (fn/prc); негативные кейсы (invalid JSON, пустой asset_code); нагрузка (bulk ingest с откатом); валидация сигнатур объектов по OperationNames/Mapping.
 
 ## 7. Замечания по актуальному состоянию
+- Для FDW-вставок батчей в central `central_ft.measurement_batches` на заводах не должен включать `id/created_at` (иначе `postgres_fdw` может отправить `NULL` и сломать insert).
+- Заводская функция `public.sp_insert_measurement_batch` должна читать элементы массива как `x.value->>'field'` (при `jsonb_array_elements(...) AS x(value, ...)`), иначе возможна ошибка `42883 record ->> unknown` при добавлении замера.
+- Если central в UI не видит замеры с заводов — проверьте `central_srv` в заводской БД (host/port/dbname) и что `OILERP__DB__CONN` / `OIL_ERP_PG` указывает на нужную central БД.
 - Ingest проверяет порядок дат/толщин, но бизнес-валидацию можно усилить (thresholds по plant/policy).
 - Event type должен оставаться `HC_MEASUREMENT_BATCH` для заводских событий.
 - План работ: см. `docs/current_plan.md` (UI/Infra/Core/SQL/Tests статус).

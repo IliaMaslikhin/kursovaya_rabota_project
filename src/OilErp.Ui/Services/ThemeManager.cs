@@ -20,6 +20,7 @@ public static class ThemeManager
         app.Resources["Brush.TextPrimary"] = palette.PrimaryTextBrush;
         app.Resources["Brush.TextSecondary"] = palette.SecondaryTextBrush;
         app.Resources["Brush.Accent"] = palette.AccentBrush;
+        app.Resources["Brush.AccentText"] = palette.AccentTextBrush;
         app.Resources["Brush.AccentMuted"] = palette.AccentMutedBrush;
         app.Resources["Brush.Critical"] = palette.CriticalBrush;
 

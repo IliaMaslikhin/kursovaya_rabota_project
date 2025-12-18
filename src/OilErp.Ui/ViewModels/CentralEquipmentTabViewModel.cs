@@ -2,9 +2,11 @@ using System;
 using System.Collections.ObjectModel;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Npgsql;
+using NpgsqlTypes;
 using OilErp.Bootstrap;
 using OilErp.Core.Contracts;
 using OilErp.Core.Services.Central;
@@ -19,6 +21,8 @@ public sealed partial class CentralEquipmentTabViewModel : ObservableObject
 
     private readonly IStoragePort storage;
     private readonly string connectionString;
+    private readonly DispatcherTimer filterDebounceTimer;
+    private bool filterRefreshPending;
 
     public CentralEquipmentTabViewModel(IStoragePort storage, string connectionString)
     {
@@ -27,11 +31,22 @@ public sealed partial class CentralEquipmentTabViewModel : ObservableObject
 
         Items = new ObservableCollection<EquipmentItemViewModel>();
         statusMessage = "Загрузите список оборудования.";
+
+        filterDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
+        filterDebounceTimer.Tick += async (_, _) =>
+        {
+            filterDebounceTimer.Stop();
+            if (IsBusy || !filterRefreshPending) return;
+            filterRefreshPending = false;
+            await RefreshAsync();
+        };
     }
 
     public ObservableCollection<EquipmentItemViewModel> Items { get; }
 
     [ObservableProperty] private EquipmentItemViewModel? selectedItem;
+
+    [ObservableProperty] private string filterText = string.Empty;
 
     [ObservableProperty] private bool isBusy;
     [ObservableProperty] private string statusMessage;
@@ -41,6 +56,12 @@ public sealed partial class CentralEquipmentTabViewModel : ObservableObject
         AddCommand.NotifyCanExecuteChanged();
         EditCommand.NotifyCanExecuteChanged();
         DeleteCommand.NotifyCanExecuteChanged();
+
+        if (!value && filterRefreshPending)
+        {
+            filterDebounceTimer.Stop();
+            filterDebounceTimer.Start();
+        }
     }
 
     partial void OnSelectedItemChanged(EquipmentItemViewModel? value)
@@ -61,6 +82,13 @@ public sealed partial class CentralEquipmentTabViewModel : ObservableObject
 
         EditCommand.NotifyCanExecuteChanged();
         DeleteCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnFilterTextChanged(string value)
+    {
+        filterRefreshPending = true;
+        filterDebounceTimer.Stop();
+        filterDebounceTimer.Start();
     }
 
     private bool CanOpenDialog() => !IsBusy;
@@ -92,9 +120,15 @@ public sealed partial class CentralEquipmentTabViewModel : ObservableObject
             cmd.CommandText = """
                 select asset_code, name, type, plant_code
                 from public.assets_global
+                where @q is null
+                   or asset_code ilike @q
+                   or coalesce(name,'') ilike @q
+                   or coalesce(type,'') ilike @q
+                   or coalesce(plant_code,'') ilike @q
                 order by asset_code
                 limit 500
                 """;
+            cmd.Parameters.Add("q", NpgsqlDbType.Text).Value = string.IsNullOrWhiteSpace(FilterText) ? DBNull.Value : $"%{FilterText.Trim()}%";
             await using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
@@ -116,6 +150,13 @@ public sealed partial class CentralEquipmentTabViewModel : ObservableObject
         {
             IsBusy = false;
         }
+    }
+
+    [RelayCommand]
+    private async Task ClearFilterAsync()
+    {
+        FilterText = string.Empty;
+        await RefreshAsync();
     }
 
     [RelayCommand(CanExecute = nameof(CanOpenDialog))]

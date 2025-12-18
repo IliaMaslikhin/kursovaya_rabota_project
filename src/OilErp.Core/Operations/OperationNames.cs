@@ -44,31 +44,6 @@ public static class OperationNames
         public const string PolicyUpsert = "public.fn_policy_upsert";
 
         /// <summary>
-        /// Enqueue event: public.fn_events_enqueue(p_event_type text, p_source_plant text, p_payload jsonb)
-        /// </summary>
-        public const string EventsEnqueue = "public.fn_events_enqueue";
-
-        /// <summary>
-        /// Peek events: public.fn_events_peek(p_limit int) RETURNS TABLE(...)
-        /// </summary>
-        public const string EventsPeek = "public.fn_events_peek";
-
-        /// <summary>
-        /// Ingest events: public.fn_ingest_events(p_limit int)
-        /// </summary>
-        public const string EventsIngest = "public.fn_ingest_events";
-
-        /// <summary>
-        /// Requeue events: public.fn_events_requeue(p_ids bigint[])
-        /// </summary>
-        public const string EventsRequeue = "public.fn_events_requeue";
-
-        /// <summary>
-        /// Cleanup events: public.fn_events_cleanup(p_older_than interval)
-        /// </summary>
-        public const string EventsCleanup = "public.fn_events_cleanup";
-
-        /// <summary>
         /// Evaluate risk: public.fn_eval_risk(p_asset_code text, p_policy_name text) RETURNS TABLE(...)
         /// </summary>
         public const string EvalRisk = "public.fn_eval_risk";
@@ -89,26 +64,6 @@ public static class OperationNames
         public const string AnalyticsPlantCrStats = "public.fn_plant_cr_stats";
 
         // Procedures (CALL ...)
-
-        /// <summary>
-        /// Procedure: public.sp_ingest_events(p_limit int)
-        /// </summary>
-        public const string SpIngestEvents = "public.sp_ingest_events";
-
-        /// <summary>
-        /// Procedure: public.sp_events_enqueue(p_event_type text, p_source_plant text, p_payload jsonb)
-        /// </summary>
-        public const string SpEventsEnqueue = "public.sp_events_enqueue";
-
-        /// <summary>
-        /// Procedure: public.sp_events_requeue(p_ids bigint[])
-        /// </summary>
-        public const string SpEventsRequeue = "public.sp_events_requeue";
-
-        /// <summary>
-        /// Procedure: public.sp_events_cleanup(p_older_than interval)
-        /// </summary>
-        public const string SpEventsCleanup = "public.sp_events_cleanup";
 
         /// <summary>
         /// Procedure: public.sp_policy_upsert(p_name text, p_low numeric, p_med numeric, p_high numeric)

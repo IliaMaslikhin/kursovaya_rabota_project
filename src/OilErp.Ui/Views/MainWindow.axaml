@@ -67,22 +67,41 @@
                             <Grid RowDefinitions="Auto,Auto,*"
                                   RowSpacing="10"
                                   Margin="8">
-                                <StackPanel Orientation="Horizontal"
-                                            Spacing="8">
+                                <WrapPanel>
+                                    <WrapPanel.Styles>
+                                        <Style Selector="WrapPanel > :is(Control)">
+                                            <Setter Property="Margin" Value="0,0,8,8"/>
+                                        </Style>
+                                    </WrapPanel.Styles>
                                     <Button Content="Обновить"
                                             Command="{Binding RefreshCommand}"/>
-                                    <Button Content="+"
-                                            Width="40"
+                                    <Button Content="Добавить"
+                                            Classes="primary"
                                             Command="{Binding AddCommand}"/>
+                                    <TextBox Width="220"
+                                             Watermark="Поиск (код/локация/статус)"
+                                             Text="{Binding FilterText}">
+                                        <TextBox.KeyBindings>
+                                            <KeyBinding Gesture="Enter"
+                                                        Command="{Binding RefreshCommand}"/>
+                                        </TextBox.KeyBindings>
+                                    </TextBox>
+                                    <Button Content="Сброс"
+                                            Command="{Binding ClearFilterCommand}"/>
                                     <Button Content="Изменить"
                                             Command="{Binding EditCommand}"/>
                                     <Button Content="Удалить"
                                             Command="{Binding DeleteCommand}"/>
+                                    <ProgressBar IsIndeterminate="True"
+                                                 IsVisible="{Binding IsBusy}"
+                                                 Width="90"
+                                                 Height="4"
+                                                 VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding StatusMessage}"
                                                Foreground="{DynamicResource Brush.TextSecondary}"
                                                VerticalAlignment="Center"
                                                TextWrapping="Wrap"/>
-                                </StackPanel>
+                                </WrapPanel>
 
                                 <Border Grid.Row="1"
                                         Padding="10"
@@ -125,10 +144,21 @@
                                          BorderBrush="{DynamicResource Brush.Border}"
                                          BorderThickness="1"
                                          Background="{DynamicResource Brush.PanelBackground}">
+                                    <ListBox.Styles>
+                                        <Style Selector="ListBoxItem">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.CardBackground}"/>
+                                        </Style>
+                                        <Style Selector="ListBoxItem:pointerover">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.PanelBackground}"/>
+                                        </Style>
+                                        <Style Selector="ListBoxItem:selected">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.AccentMuted}"/>
+                                        </Style>
+                                    </ListBox.Styles>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate x:DataType="vm:EquipmentItemViewModel">
                                             <Border Padding="10"
-                                                    Background="{DynamicResource Brush.CardBackground}"
+                                                    Background="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Background}"
                                                     BorderBrush="{DynamicResource Brush.Border}"
                                                     BorderThickness="0,0,0,1">
                                                 <Grid ColumnDefinitions="160,*,160,120">
@@ -180,21 +210,56 @@
                                           VerticalScrollBarVisibility="Auto">
                                 <StackPanel Spacing="10"
                                             Margin="8">
-                                    <StackPanel Orientation="Horizontal"
-                                                Spacing="8">
+                                    <WrapPanel>
+                                        <WrapPanel.Styles>
+                                            <Style Selector="WrapPanel > :is(Control)">
+                                                <Setter Property="Margin" Value="0,0,8,8"/>
+                                            </Style>
+                                        </WrapPanel.Styles>
                                         <TextBlock Text="CENTRAL"
                                                    FontWeight="SemiBold"
                                                    Foreground="{DynamicResource Brush.TextPrimary}"
                                                    VerticalAlignment="Center"/>
                                         <Button Content="Обновить"
                                                 Command="{Binding RefreshCommand}"/>
-                                        <Button Content="+ замер"
+                                        <TextBox Width="220"
+                                                 Watermark="Поиск (код/название/тип/завод)"
+                                                 Text="{Binding FilterText}">
+                                            <TextBox.KeyBindings>
+                                                <KeyBinding Gesture="Enter"
+                                                            Command="{Binding RefreshCommand}"/>
+                                            </TextBox.KeyBindings>
+                                        </TextBox>
+                                        <ComboBox Width="180"
+                                                  ToolTip.Tip="Сортировка оборудования"
+                                                  ItemsSource="{Binding EquipmentSortOptions}"
+                                                  SelectedItem="{Binding SelectedEquipmentSort}"/>
+                                        <ComboBox Width="240"
+                                                  ToolTip.Tip="Группировка списка"
+                                                  ItemsSource="{Binding EquipmentGroupOptions}"
+                                                  SelectedItem="{Binding SelectedEquipmentGroup}"/>
+                                        <Button Content="Сброс"
+                                                Command="{Binding ClearFilterCommand}"/>
+                                        <Button Content="Добавить замер"
+                                                Classes="primary"
+                                                ToolTip.Tip="Выберите оборудование и добавьте замер (central)"
                                                 Command="{Binding AddMeasurementCommand}"/>
+                                        <Button Content="История"
+                                                ToolTip.Tip="Открыть историю замеров для выбранного оборудования"
+                                                Command="{Binding ShowHistoryCommand}"/>
+                                        <Button Content="Импорт/Экспорт"
+                                                ToolTip.Tip="Экспорт/импорт замеров по всем заводам (CENTRAL)"
+                                                Command="{Binding OpenTransferCommand}"/>
+                                        <ProgressBar IsIndeterminate="True"
+                                                     IsVisible="{Binding IsBusy}"
+                                                     Width="90"
+                                                     Height="4"
+                                                     VerticalAlignment="Center"/>
                                         <TextBlock Text="{Binding StatusMessage}"
                                                    Foreground="{DynamicResource Brush.TextSecondary}"
                                                    VerticalAlignment="Center"
                                                    TextWrapping="Wrap"/>
-                                    </StackPanel>
+                                    </WrapPanel>
 
                                     <Border Padding="10"
                                             Background="{DynamicResource Brush.PanelBackground}"
@@ -224,6 +289,13 @@
                                                 <TextBlock Text="Тип"
                                                            Foreground="{DynamicResource Brush.TextSecondary}"/>
                                             </Border>
+                                            <Border Width="120"
+                                                    Padding="6,0"
+                                                    BorderBrush="{DynamicResource Brush.Border}"
+                                                    BorderThickness="0,0,1,0">
+                                                <TextBlock Text="Завод"
+                                                           Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                            </Border>
                                             <ItemsControl ItemsSource="{Binding Columns}">
                                                 <ItemsControl.ItemsPanel>
                                                     <ItemsPanelTemplate>
@@ -246,15 +318,37 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <ListBox ItemsSource="{Binding Rows}"
-                                             SelectedItem="{Binding SelectedRow}"
+                                    <ListBox ItemsSource="{Binding DisplayRows}"
+                                             SelectedItem="{Binding SelectedDisplayRow}"
                                              BorderBrush="{DynamicResource Brush.Border}"
                                              BorderThickness="1"
                                              Background="{DynamicResource Brush.PanelBackground}">
-                                        <ListBox.ItemTemplate>
+                                        <ListBox.Styles>
+                                            <Style Selector="ListBoxItem">
+                                                <Setter Property="Background" Value="{DynamicResource Brush.CardBackground}"/>
+                                            </Style>
+                                            <Style Selector="ListBoxItem:pointerover">
+                                                <Setter Property="Background" Value="{DynamicResource Brush.PanelBackground}"/>
+                                            </Style>
+                                            <Style Selector="ListBoxItem:selected">
+                                                <Setter Property="Background" Value="{DynamicResource Brush.AccentMuted}"/>
+                                            </Style>
+                                        </ListBox.Styles>
+                                        <ListBox.DataTemplates>
+                                            <DataTemplate x:DataType="vm:CentralMeasurementsGroupHeaderViewModel">
+                                                <Border Padding="10,8"
+                                                        Background="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Background}"
+                                                        BorderBrush="{DynamicResource Brush.Border}"
+                                                        BorderThickness="0,0,0,1">
+                                                    <TextBlock Text="{Binding DisplayTitle}"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource Brush.TextPrimary}"
+                                                               TextWrapping="NoWrap"/>
+                                                </Border>
+                                            </DataTemplate>
                                             <DataTemplate x:DataType="vm:CentralMeasurementEquipmentRowViewModel">
                                                 <Border Padding="10"
-                                                        Background="{DynamicResource Brush.CardBackground}"
+                                                        Background="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Background}"
                                                         BorderBrush="{DynamicResource Brush.Border}"
                                                         BorderThickness="0,0,0,1">
                                                     <StackPanel Orientation="Horizontal"
@@ -284,6 +378,14 @@
                                                                        Foreground="{DynamicResource Brush.TextSecondary}"
                                                                        TextWrapping="NoWrap"/>
                                                         </Border>
+                                                        <Border Width="120"
+                                                                Padding="6,0"
+                                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                                BorderThickness="0,0,1,0">
+                                                            <TextBlock Text="{Binding PlantCode}"
+                                                                       Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                       TextWrapping="NoWrap"/>
+                                                        </Border>
 
                                                         <ItemsControl ItemsSource="{Binding Cells}">
                                                             <ItemsControl.ItemsPanel>
@@ -307,111 +409,8 @@
                                                     </StackPanel>
                                                 </Border>
                                             </DataTemplate>
-                                        </ListBox.ItemTemplate>
+                                        </ListBox.DataTemplates>
                                     </ListBox>
-                                </StackPanel>
-                            </ScrollViewer>
-                        </DataTemplate>
-                    </ContentControl.ContentTemplate>
-                </ContentControl>
-            </TabItem>
-
-            <TabItem Header="Очередь / Ingest">
-                <ContentControl Content="{Binding EventQueue}">
-                    <ContentControl.ContentTemplate>
-                        <DataTemplate x:DataType="vm:EventQueueViewModel">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <StackPanel Spacing="12"
-                                            Margin="8">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Button Content="Обновить" Command="{Binding RefreshCommand}"/>
-                                        <Button Content="Вернуть" Command="{Binding RequeueCommand}"/>
-                                        <StackPanel Orientation="Horizontal"
-                                                    Spacing="4"
-                                                    VerticalAlignment="Center">
-                                            <TextBlock Text="Лимит"
-                                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
-                                            <TextBox Width="60"
-                                                     Text="{Binding Limit}"/>
-                                        </StackPanel>
-                                        <StackPanel Orientation="Horizontal"
-                                                    Spacing="4"
-                                                    VerticalAlignment="Center">
-                                            <TextBlock Text="Очистить старше, сек"
-                                                       Foreground="{DynamicResource Brush.TextSecondary}"/>
-                                            <TextBox Width="80"
-                                                     Text="{Binding CleanupAgeSeconds}"/>
-                                            <Button Content="Очистить"
-                                                    Command="{Binding CleanupCommand}"/>
-                                        </StackPanel>
-                                        <TextBlock Text="{Binding StatusMessage}"
-                                                   Foreground="{DynamicResource Brush.TextSecondary}"
-                                                   VerticalAlignment="Center"
-                                                   TextWrapping="Wrap"/>
-                                    </StackPanel>
-
-                                    <Border Padding="10"
-                                            Background="{DynamicResource Brush.PanelBackground}"
-                                            BorderBrush="{DynamicResource Brush.Border}"
-                                            BorderThickness="1"
-                                            CornerRadius="8">
-                                        <StackPanel Spacing="6">
-                                            <TextBlock Text="Необработанные события"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource Brush.TextPrimary}"/>
-                                            <ItemsControl ItemsSource="{Binding Events}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate x:DataType="vm:EventQueueRowViewModel">
-                                                        <Border Padding="8"
-                                                                Margin="0 0 0 8"
-                                                                Background="{DynamicResource Brush.CardBackground}"
-                                                                BorderBrush="{DynamicResource Brush.Border}"
-                                                                BorderThickness="1"
-                                                                CornerRadius="6">
-                                                            <StackPanel Spacing="4">
-                                                                <Grid ColumnDefinitions="Auto,*,Auto"
-                                                                      ColumnSpacing="10">
-                                                                    <TextBlock Text="{Binding Id}"
-                                                                               Foreground="{DynamicResource Brush.TextSecondary}"/>
-                                                                    <TextBlock Grid.Column="1"
-                                                                               Text="{Binding SourcePlant}"
-                                                                               Foreground="{DynamicResource Brush.TextPrimary}"/>
-                                                                    <TextBlock Grid.Column="2"
-                                                                               Text="{Binding EventType}"
-                                                                               Foreground="{DynamicResource Brush.TextSecondary}"/>
-                                                                </Grid>
-                                                                <TextBlock Text="{Binding CreatedAt}"
-                                                                           Foreground="{DynamicResource Brush.TextSecondary}"/>
-                                                                <TextBlock Text="{Binding Payload}"
-                                                                           Foreground="{DynamicResource Brush.TextPrimary}"
-                                                                           TextWrapping="Wrap"/>
-                                                            </StackPanel>
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </StackPanel>
-                                    </Border>
-
-                                    <Border Padding="10"
-                                            Background="{DynamicResource Brush.PanelBackground}"
-                                            BorderBrush="{DynamicResource Brush.Border}"
-                                            BorderThickness="1"
-                                            CornerRadius="8">
-                                        <StackPanel Spacing="6">
-                                            <TextBlock Text="events_ingest уведомления"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource Brush.TextPrimary}"/>
-                                            <ItemsControl ItemsSource="{Binding IngestNotifications}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Text="{Binding}"
-                                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </StackPanel>
-                                    </Border>
                                 </StackPanel>
                             </ScrollViewer>
                         </DataTemplate>
@@ -428,7 +427,6 @@
                                             Margin="8">
                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                         <Button Content="Обновить" Command="{Binding RefreshCommand}"/>
-                                        <Button Content="Собрать" Command="{Binding IngestCommand}"/>
                                         <TextBlock Text="{Binding StatusMessage}"
                                                    Foreground="{DynamicResource Brush.TextSecondary}"
                                                    VerticalAlignment="Center"
@@ -480,22 +478,41 @@
                             <Grid RowDefinitions="Auto,Auto,*"
                                   RowSpacing="10"
                                   Margin="8">
-                                <StackPanel Orientation="Horizontal"
-                                            Spacing="8">
+                                <WrapPanel>
+                                    <WrapPanel.Styles>
+                                        <Style Selector="WrapPanel > :is(Control)">
+                                            <Setter Property="Margin" Value="0,0,8,8"/>
+                                        </Style>
+                                    </WrapPanel.Styles>
                                     <Button Content="Обновить"
                                             Command="{Binding RefreshCommand}"/>
-                                    <Button Content="+"
-                                            Width="40"
+                                    <Button Content="Добавить"
+                                            Classes="primary"
                                             Command="{Binding AddCommand}"/>
+                                    <TextBox Width="220"
+                                             Watermark="Поиск (код/название/тип/завод)"
+                                             Text="{Binding FilterText}">
+                                        <TextBox.KeyBindings>
+                                            <KeyBinding Gesture="Enter"
+                                                        Command="{Binding RefreshCommand}"/>
+                                        </TextBox.KeyBindings>
+                                    </TextBox>
+                                    <Button Content="Сброс"
+                                            Command="{Binding ClearFilterCommand}"/>
                                     <Button Content="Изменить"
                                             Command="{Binding EditCommand}"/>
                                     <Button Content="Удалить"
                                             Command="{Binding DeleteCommand}"/>
+                                    <ProgressBar IsIndeterminate="True"
+                                                 IsVisible="{Binding IsBusy}"
+                                                 Width="90"
+                                                 Height="4"
+                                                 VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding StatusMessage}"
                                                Foreground="{DynamicResource Brush.TextSecondary}"
                                                VerticalAlignment="Center"
                                                TextWrapping="Wrap"/>
-                                </StackPanel>
+                                </WrapPanel>
 
                                 <Border Grid.Row="1"
                                         Padding="10"
@@ -538,10 +555,21 @@
                                          BorderBrush="{DynamicResource Brush.Border}"
                                          BorderThickness="1"
                                          Background="{DynamicResource Brush.PanelBackground}">
+                                    <ListBox.Styles>
+                                        <Style Selector="ListBoxItem">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.CardBackground}"/>
+                                        </Style>
+                                        <Style Selector="ListBoxItem:pointerover">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.PanelBackground}"/>
+                                        </Style>
+                                        <Style Selector="ListBoxItem:selected">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.AccentMuted}"/>
+                                        </Style>
+                                    </ListBox.Styles>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate x:DataType="vm:PolicyItemViewModel">
                                             <Border Padding="10"
-                                                    Background="{DynamicResource Brush.CardBackground}"
+                                                    Background="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Background}"
                                                     BorderBrush="{DynamicResource Brush.Border}"
                                                     BorderThickness="0,0,0,1">
                                                 <Grid ColumnDefinitions="220,*,*,*">
@@ -585,57 +613,6 @@
                 </ContentControl>
             </TabItem>
 
-            <TabItem Header="Диагностика">
-                <ContentControl Content="{Binding Diagnostics}">
-                    <ContentControl.ContentTemplate>
-                        <DataTemplate x:DataType="vm:DiagnosticsPanelViewModel">
-                            <StackPanel Spacing="8"
-                                        Margin="8">
-                                <StackPanel Orientation="Horizontal"
-                                            Spacing="8">
-                                    <ComboBox Width="220"
-                                              ItemsSource="{Binding AvailableChannels}"
-                                              SelectedItem="{Binding Channel}"
-                                              IsEditable="True"
-                                              PlaceholderText="Канал LISTEN"/>
-                                    <CheckBox Content="Авто-переподключение"
-                                              IsChecked="{Binding AutoReconnect}"
-                                              Foreground="{DynamicResource Brush.TextPrimary}"/>
-                                    <Button Content="Старт" Command="{Binding StartCommand}"/>
-                                    <Button Content="Стоп" Command="{Binding StopCommand}"/>
-                                    <TextBlock Text="{Binding StatusMessage}"
-                                               Foreground="{DynamicResource Brush.TextSecondary}"
-                                               VerticalAlignment="Center"
-                                               TextWrapping="Wrap"/>
-                                </StackPanel>
-                                <ItemsControl ItemsSource="{Binding Entries}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Padding="8"
-                                                    Margin="0 0 0 6"
-                                                    Background="{DynamicResource Brush.CardBackground}"
-                                                    BorderBrush="{DynamicResource Brush.Border}"
-                                                    BorderThickness="1"
-                                                    CornerRadius="6">
-                                                <StackPanel>
-                                                    <TextBlock Text="{Binding Timestamp}"
-                                                               Foreground="{DynamicResource Brush.TextSecondary}"/>
-                                                    <TextBlock Text="{Binding Headline}"
-                                                               Foreground="{DynamicResource Brush.TextPrimary}"/>
-                                                    <TextBlock Text="{Binding Detail}"
-                                                               Foreground="{DynamicResource Brush.TextSecondary}"
-                                                               TextWrapping="Wrap"/>
-                                                </StackPanel>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </DataTemplate>
-                    </ContentControl.ContentTemplate>
-                </ContentControl>
-            </TabItem>
-
             <TabItem Header="Настройки">
                 <Border Margin="8"
                         Padding="18"
@@ -660,7 +637,7 @@
                         <ComboBox ItemsSource="{Binding ThemeOptions}"
                                   SelectedItem="{Binding SelectedTheme}"
                                   Width="220"/>
-                        <TextBlock Text="Ultra black — глухой черный; JetBrains light — светлая как IDE."
+                        <TextBlock Text="Тёмная — высокая контрастность; Светлая — нейтральная."
                                    Foreground="{DynamicResource Brush.TextSecondary}"
                                    TextWrapping="Wrap"/>
                     </StackPanel>
@@ -679,22 +656,41 @@
                             <Grid RowDefinitions="Auto,Auto,*"
                                   RowSpacing="10"
                                   Margin="8">
-                                <StackPanel Orientation="Horizontal"
-                                            Spacing="8">
+                                <WrapPanel>
+                                    <WrapPanel.Styles>
+                                        <Style Selector="WrapPanel > :is(Control)">
+                                            <Setter Property="Margin" Value="0,0,8,8"/>
+                                        </Style>
+                                    </WrapPanel.Styles>
                                     <Button Content="Обновить"
                                             Command="{Binding RefreshCommand}"/>
-                                    <Button Content="+"
-                                            Width="40"
+                                    <Button Content="Добавить"
+                                            Classes="primary"
                                             Command="{Binding AddCommand}"/>
+                                    <TextBox Width="220"
+                                             Watermark="Поиск (имя)"
+                                             Text="{Binding FilterText}">
+                                        <TextBox.KeyBindings>
+                                            <KeyBinding Gesture="Enter"
+                                                        Command="{Binding RefreshCommand}"/>
+                                        </TextBox.KeyBindings>
+                                    </TextBox>
+                                    <Button Content="Сброс"
+                                            Command="{Binding ClearFilterCommand}"/>
                                     <Button Content="Изменить"
                                             Command="{Binding EditCommand}"/>
                                     <Button Content="Удалить"
                                             Command="{Binding DeleteCommand}"/>
+                                    <ProgressBar IsIndeterminate="True"
+                                                 IsVisible="{Binding IsBusy}"
+                                                 Width="90"
+                                                 Height="4"
+                                                 VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding StatusMessage}"
                                                Foreground="{DynamicResource Brush.TextSecondary}"
                                                VerticalAlignment="Center"
                                                TextWrapping="Wrap"/>
-                                </StackPanel>
+                                </WrapPanel>
 
                                 <Border Grid.Row="1"
                                         Padding="10"
@@ -737,10 +733,21 @@
                                          BorderBrush="{DynamicResource Brush.Border}"
                                          BorderThickness="1"
                                          Background="{DynamicResource Brush.PanelBackground}">
+                                    <ListBox.Styles>
+                                        <Style Selector="ListBoxItem">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.CardBackground}"/>
+                                        </Style>
+                                        <Style Selector="ListBoxItem:pointerover">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.PanelBackground}"/>
+                                        </Style>
+                                        <Style Selector="ListBoxItem:selected">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.AccentMuted}"/>
+                                        </Style>
+                                    </ListBox.Styles>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate x:DataType="vm:PlantEquipmentItemViewModel">
                                             <Border Padding="10"
-                                                    Background="{DynamicResource Brush.CardBackground}"
+                                                    Background="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Background}"
                                                     BorderBrush="{DynamicResource Brush.Border}"
                                                     BorderThickness="0,0,0,1">
                                                 <Grid ColumnDefinitions="160,*,140,180">
@@ -792,21 +799,63 @@
                                           VerticalScrollBarVisibility="Auto">
                                 <StackPanel Spacing="10"
                                             Margin="8">
-                                    <StackPanel Orientation="Horizontal"
-                                                Spacing="8">
+                                    <WrapPanel>
+                                        <WrapPanel.Styles>
+                                            <Style Selector="WrapPanel > :is(Control)">
+                                                <Setter Property="Margin" Value="0,0,8,8"/>
+                                            </Style>
+                                        </WrapPanel.Styles>
                                         <TextBlock Text="{Binding PlantCode}"
                                                    FontWeight="SemiBold"
                                                    Foreground="{DynamicResource Brush.TextPrimary}"
                                                    VerticalAlignment="Center"/>
                                         <Button Content="Обновить"
+                                                ToolTip.Tip="Обновить таблицу (учитывает фильтр)"
                                                 Command="{Binding RefreshCommand}"/>
-                                        <Button Content="+ замер"
+                                        <TextBox Width="220"
+                                                 Watermark="Поиск (код/локация/статус)"
+                                                 Text="{Binding FilterText}">
+                                            <TextBox.KeyBindings>
+                                                <KeyBinding Gesture="Enter"
+                                                            Command="{Binding RefreshCommand}"/>
+                                            </TextBox.KeyBindings>
+                                        </TextBox>
+                                        <ComboBox Width="180"
+                                                  ToolTip.Tip="Сортировка оборудования"
+                                                  ItemsSource="{Binding EquipmentSortOptions}"
+                                                  SelectedItem="{Binding SelectedEquipmentSort}"/>
+                                        <ComboBox Width="240"
+                                                  ToolTip.Tip="Группировка списка"
+                                                  ItemsSource="{Binding EquipmentGroupOptions}"
+                                                  SelectedItem="{Binding SelectedEquipmentGroup}"/>
+                                        <Button Content="Сброс"
+                                                Command="{Binding ClearFilterCommand}"/>
+                                        <Button Content="Добавить замер"
+                                                Classes="primary"
+                                                ToolTip.Tip="Выберите оборудование и добавьте замер"
                                                 Command="{Binding AddMeasurementCommand}"/>
+                                        <Button Content="История"
+                                                ToolTip.Tip="История замеров выбранного оборудования"
+                                                Command="{Binding ShowHistoryCommand}"/>
+                                        <Button Content="Импорт/Экспорт"
+                                                ToolTip.Tip="Экспорт/импорт замеров по заводу"
+                                                Command="{Binding OpenTransferCommand}"/>
+                                        <Button Content="Изменить замер"
+                                                ToolTip.Tip="Изменить последний замер выбранного оборудования"
+                                                Command="{Binding EditLastMeasurementCommand}"/>
+                                        <Button Content="Удалить замер"
+                                                ToolTip.Tip="Удалить последний замер выбранного оборудования"
+                                                Command="{Binding DeleteLastMeasurementCommand}"/>
+                                        <ProgressBar IsIndeterminate="True"
+                                                     IsVisible="{Binding IsBusy}"
+                                                     Width="90"
+                                                     Height="4"
+                                                     VerticalAlignment="Center"/>
                                         <TextBlock Text="{Binding StatusMessage}"
                                                    Foreground="{DynamicResource Brush.TextSecondary}"
                                                    VerticalAlignment="Center"
                                                    TextWrapping="Wrap"/>
-                                    </StackPanel>
+                                    </WrapPanel>
 
                                     <Border Padding="10"
                                             Background="{DynamicResource Brush.PanelBackground}"
@@ -858,15 +907,37 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <ListBox ItemsSource="{Binding Rows}"
-                                             SelectedItem="{Binding SelectedRow}"
+                                    <ListBox ItemsSource="{Binding DisplayRows}"
+                                             SelectedItem="{Binding SelectedDisplayRow}"
                                              BorderBrush="{DynamicResource Brush.Border}"
                                              BorderThickness="1"
                                              Background="{DynamicResource Brush.PanelBackground}">
-                                        <ListBox.ItemTemplate>
+                                        <ListBox.Styles>
+                                            <Style Selector="ListBoxItem">
+                                                <Setter Property="Background" Value="{DynamicResource Brush.CardBackground}"/>
+                                            </Style>
+                                            <Style Selector="ListBoxItem:pointerover">
+                                                <Setter Property="Background" Value="{DynamicResource Brush.PanelBackground}"/>
+                                            </Style>
+                                            <Style Selector="ListBoxItem:selected">
+                                                <Setter Property="Background" Value="{DynamicResource Brush.AccentMuted}"/>
+                                            </Style>
+                                        </ListBox.Styles>
+                                        <ListBox.DataTemplates>
+                                            <DataTemplate x:DataType="vm:PlantMeasurementsGroupHeaderViewModel">
+                                                <Border Padding="10,8"
+                                                        Background="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Background}"
+                                                        BorderBrush="{DynamicResource Brush.Border}"
+                                                        BorderThickness="0,0,0,1">
+                                                    <TextBlock Text="{Binding DisplayTitle}"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource Brush.TextPrimary}"
+                                                               TextWrapping="NoWrap"/>
+                                                </Border>
+                                            </DataTemplate>
                                             <DataTemplate x:DataType="vm:PlantMeasurementEquipmentRowViewModel">
                                                 <Border Padding="10"
-                                                        Background="{DynamicResource Brush.CardBackground}"
+                                                        Background="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Background}"
                                                         BorderBrush="{DynamicResource Brush.Border}"
                                                         BorderThickness="0,0,0,1">
                                                     <StackPanel Orientation="Horizontal"
@@ -919,7 +990,7 @@
                                                     </StackPanel>
                                                 </Border>
                                             </DataTemplate>
-                                        </ListBox.ItemTemplate>
+                                        </ListBox.DataTemplates>
                                     </ListBox>
                                 </StackPanel>
                             </ScrollViewer>
