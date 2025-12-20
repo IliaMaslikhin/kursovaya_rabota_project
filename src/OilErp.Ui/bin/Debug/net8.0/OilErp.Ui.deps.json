@@ -16,7 +16,8 @@
           "CommunityToolkit.Mvvm": "8.2.1",
           "Npgsql": "10.0.0-rc.1",
           "OilErp.Core": "1.0.0",
-          "OilErp.Infrastructure": "1.0.0"
+          "OilErp.Infrastructure": "1.0.0",
+          "OilErp.Tests.Runner": "1.0.0"
         },
         "runtime": {
           "OilErp.Ui.dll": {}
@@ -513,6 +514,18 @@
             "fileVersion": "1.0.0.0"
           }
         }
+      },
+      "OilErp.Tests.Runner/1.0.0": {
+        "dependencies": {
+          "OilErp.Core": "1.0.0",
+          "OilErp.Infrastructure": "1.0.0"
+        },
+        "runtime": {
+          "OilErp.Tests.Runner.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
       }
     }
   },
@@ -759,6 +772,11 @@
       "sha512": ""
     },
     "OilErp.Infrastructure/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "OilErp.Tests.Runner/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

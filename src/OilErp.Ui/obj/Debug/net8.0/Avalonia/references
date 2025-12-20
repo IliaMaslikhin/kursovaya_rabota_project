@@ -37,6 +37,7 @@
 /Users/Ilia/.nuget/packages/npgsql/10.0.0-rc.1/lib/net8.0/Npgsql.dll
 /Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Core/obj/Debug/net8.0/ref/OilErp.Core.dll
 /Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/obj/Debug/net8.0/ref/OilErp.Infrastructure.dll
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Tests.Runner/obj/Debug/net8.0/ref/OilErp.Tests.Runner.dll
 /Users/Ilia/.nuget/packages/skiasharp/2.88.9/lib/net6.0/SkiaSharp.dll
 /Users/Ilia/.nuget/packages/microsoft.netcore.app.ref/8.0.20/ref/net8.0/System.AppContext.dll
 /Users/Ilia/.nuget/packages/microsoft.netcore.app.ref/8.0.20/ref/net8.0/System.Buffers.dll

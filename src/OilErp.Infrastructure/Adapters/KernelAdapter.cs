@@ -3,16 +3,16 @@ using OilErp.Core.Contracts;
 namespace OilErp.Infrastructure.Adapters;
 
 /// <summary>
-/// Kernel adapter implementation that provides access to storage operations
+/// Простой адаптер ядра: хранит ссылку на хранилище.
 /// </summary>
 public class KernelAdapter : ICoreKernel
 {
     private readonly IStoragePort _storage;
 
     /// <summary>
-    /// Initializes a new instance of the KernelAdapter class
+    /// Создаёт адаптер и проверяет, что хранилище передано.
     /// </summary>
-    /// <param name="storage">Storage port instance</param>
+    /// <param name="storage">Реализация доступа к базе</param>
     public KernelAdapter(IStoragePort storage)
     {
         _storage = storage ?? throw new ArgumentNullException(nameof(storage));

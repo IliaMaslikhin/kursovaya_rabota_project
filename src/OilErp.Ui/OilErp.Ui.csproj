@@ -30,6 +30,7 @@
   <ItemGroup>
     <ProjectReference Include="..\OilErp.Core\OilErp.Core.csproj" />
     <ProjectReference Include="..\OilErp.Infrastructure\OilErp.Infrastructure.csproj" />
+    <ProjectReference Include="..\OilErp.Tests.Runner\OilErp.Tests.Runner.csproj" />
   </ItemGroup>
 
   <ItemGroup>

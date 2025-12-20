@@ -7,12 +7,12 @@ using OilErp.Tests.Runner.Util;
 namespace OilErp.Tests.Runner.Smoke;
 
 /// <summary>
-/// Kernel-level health checks (connections, kernel bootstrapping, transactions).
+/// Смоук-проверки ядра: подключение, базовые запросы, транзакции.
 /// </summary>
 public class KernelSmoke
 {
     /// <summary>
-    /// Opens a raw Npgsql connection using the same config the kernel will consume.
+    /// Открывает сырое соединение Npgsql с конфигом, как у ядра.
     /// </summary>
     public async Task<TestResult> TestKernelOpensConnection()
     {
@@ -35,7 +35,7 @@ public class KernelSmoke
     }
 
     /// <summary>
-    /// Runs a lightweight analytics query via the kernel storage to ensure adapters are wired.
+    /// Делает лёгкий аналитический запрос через ядро, чтобы убедиться, что адаптеры работают.
     /// </summary>
     public async Task<TestResult> TestKernelExecutesHealthQuery()
     {
@@ -57,7 +57,7 @@ public class KernelSmoke
     }
 
     /// <summary>
-    /// Ensures begin/commit/rollback paths on kernel.Storage do not leak connections.
+    /// Проверяет, что begin/commit/rollback не оставляют открытых подключений.
     /// </summary>
     public async Task<TestResult> TestKernelTransactionLifecycle()
     {

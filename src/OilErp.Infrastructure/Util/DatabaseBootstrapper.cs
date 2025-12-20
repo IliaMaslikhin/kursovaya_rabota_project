@@ -181,7 +181,7 @@ public sealed class DatabaseBootstrapper
         }
         catch
         {
-            // ignored
+            // Ошибку поиска файла игнорируем.
         }
 
         return null;

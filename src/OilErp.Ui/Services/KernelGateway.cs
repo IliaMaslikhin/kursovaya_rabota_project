@@ -94,7 +94,7 @@ public sealed class KernelGateway
 
     private static string ValidateConnection(IStoragePort storage, string connectionString, DatabaseProfile targetProfile)
     {
-        // baseline connectivity check
+        // Базовая проверка подключения
         string actualDatabase;
         using (var conn = new NpgsqlConnection(connectionString))
         {

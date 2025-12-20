@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Linq;
 using System.Text.Json;
 using OilErp.Core.Dto;
 using OilErp.Core.Operations;
@@ -9,12 +8,12 @@ using OilErp.Tests.Runner.Util;
 namespace OilErp.Tests.Runner.Smoke;
 
 /// <summary>
-/// Extended smoke tests focused on analytical routines and JSON contracts.
+/// Расширенные смоук-тесты: аналитика и JSON-контракты.
 /// </summary>
 public class ExtendedSmokeTests
 {
     /// <summary>
-    /// Verifies that fn_calc_cr matches the local corrosion rate formula for known samples.
+    /// Проверяет, что функция fn_calc_cr даёт то же число, что и локальная формула расчёта.
     /// </summary>
     public async Task<TestResult> TestCalcCrFunctionMatchesLocalFormula()
     {
@@ -53,7 +52,7 @@ public class ExtendedSmokeTests
     }
 
     /// <summary>
-    /// Ensures fn_eval_risk honors policy thresholds for each seeded asset.
+    /// Проверяет, что fn_eval_risk считает уровни риска по порогам политики.
     /// </summary>
     public async Task<TestResult> TestEvalRiskLevelsAlignWithPolicy()
     {
@@ -62,8 +61,9 @@ public class ExtendedSmokeTests
         {
             var storage = TestEnvironment.CreateStorageAdapter();
             var dataSet = HealthCheckDataSet.CreateDefault();
-            var scenario = new CentralHealthCheckScenario(storage, dataSet);
-            var snapshot = await scenario.SeedAsync(CancellationToken.None);
+            var scenario = new CentralHealthCheckScenario(storage, TestEnvironment.ConnectionString, dataSet);
+            await using var seedContext = await scenario.SeedAsync(CancellationToken.None);
+            var snapshot = seedContext.Snapshot;
 
             var errors = new List<string>();
             foreach (var expectation in snapshot.Expectations)
@@ -112,7 +112,7 @@ public class ExtendedSmokeTests
     }
 
     /// <summary>
-    /// Confirms that fn_asset_summary_json returns all expected segments (asset, analytics, risk) for each asset.
+    /// Проверяет, что fn_asset_summary_json возвращает нужные блоки (asset/analytics/risk) для каждого актива.
     /// </summary>
     public async Task<TestResult> TestAssetSummaryJsonCompleteness()
     {
@@ -121,8 +121,9 @@ public class ExtendedSmokeTests
         {
             var storage = TestEnvironment.CreateStorageAdapter();
             var dataSet = HealthCheckDataSet.CreateDefault();
-            var scenario = new CentralHealthCheckScenario(storage, dataSet);
-            var snapshot = await scenario.SeedAsync(CancellationToken.None);
+            var scenario = new CentralHealthCheckScenario(storage, TestEnvironment.ConnectionString, dataSet);
+            await using var seedContext = await scenario.SeedAsync(CancellationToken.None);
+            var snapshot = seedContext.Snapshot;
 
             var issues = new List<string>();
             foreach (var expectation in snapshot.Expectations)

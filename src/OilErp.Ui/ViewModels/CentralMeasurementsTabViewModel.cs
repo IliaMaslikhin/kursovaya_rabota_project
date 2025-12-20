@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Threading;
+using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Npgsql;
@@ -94,7 +95,6 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
     partial void OnIsBusyChanged(bool value)
     {
         AddMeasurementCommand.NotifyCanExecuteChanged();
-        ShowHistoryCommand.NotifyCanExecuteChanged();
         OpenTransferCommand.NotifyCanExecuteChanged();
 
         if (!value && filterRefreshPending)
@@ -107,7 +107,6 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
     partial void OnSelectedRowChanged(CentralMeasurementEquipmentRowViewModel? value)
     {
         AddMeasurementCommand.NotifyCanExecuteChanged();
-        ShowHistoryCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnFilterTextChanged(string value)
@@ -128,7 +127,6 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
     }
 
     private bool CanAddMeasurement() => !IsBusy && SelectedRow is not null && IsEditableInCentral(SelectedRow);
-    private bool CanShowHistory() => !IsBusy && SelectedRow is not null;
     private bool CanOpenTransfer() => !IsBusy;
 
     [RelayCommand]
@@ -187,7 +185,8 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
 
         var assetCode = selected.Code.Trim();
 
-        var vm = new CentralMeasurementEditWindowViewModel("Добавить замер", assetCode);
+        var nextLabel = await GenerateNextLabelAsync(assetCode);
+        var vm = new CentralMeasurementEditWindowViewModel("Добавить замер", assetCode, nextLabel, isLabelReadOnly: true);
         var dialog = new CentralMeasurementEditWindow { DataContext = vm };
         var result = await UiDialogHost.ShowDialogAsync<CentralMeasurementEditResult?>(dialog);
         if (result is null) return;
@@ -241,25 +240,6 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
             IsBusy = false;
             AddMeasurementCommand.NotifyCanExecuteChanged();
         }
-    }
-
-    [RelayCommand(CanExecute = nameof(CanShowHistory))]
-    public async Task ShowHistoryAsync()
-    {
-        var selected = SelectedRow;
-        if (selected is null)
-        {
-            StatusMessage = "Выберите оборудование, чтобы открыть историю.";
-            return;
-        }
-
-        var assetCode = selected.Code.Trim();
-        var vm = new CentralMeasurementHistoryWindowViewModel(assetCode, connectionString);
-        var dialog = new CentralMeasurementHistoryWindow { DataContext = vm };
-        _ = vm.RefreshAsync();
-        await UiDialogHost.ShowDialogAsync<bool?>(dialog);
-
-        await RefreshAsync();
     }
 
     [RelayCommand(CanExecute = nameof(CanOpenTransfer))]
@@ -589,6 +569,40 @@ public sealed partial class CentralMeasurementsTabViewModel : ObservableObject
         if (row is null) return false;
         return string.IsNullOrWhiteSpace(row.PlantCode)
                || string.Equals(row.PlantCode, CentralPlantCode, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static readonly Regex LabelRegex = new(@"^T(?<n>\d+)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private async Task<string> GenerateNextLabelAsync(string assetCode)
+    {
+        await using var conn = new NpgsqlConnection(connectionString);
+        await conn.OpenAsync();
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+                          select last_label
+                          from public.measurement_batches
+                          where asset_code = @code and last_label is not null
+                          order by last_date desc, id desc
+                          limit 10
+                          """;
+        cmd.Parameters.AddWithValue("code", assetCode);
+
+        var max = 0;
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            if (reader.IsDBNull(0)) continue;
+            var lbl = reader.GetString(0);
+            var match = LabelRegex.Match(lbl.Trim());
+            if (match.Success && int.TryParse(match.Groups["n"].Value, out var num))
+            {
+                if (num > max) max = num;
+            }
+        }
+
+        var next = Math.Max(1, max + 1);
+        return $"T{next}";
     }
 }
 

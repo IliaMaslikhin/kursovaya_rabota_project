@@ -26,7 +26,7 @@ public static class FirstRunTracker
         }
         catch
         {
-            // swallow
+            // Ошибку записи метки игнорируем.
         }
     }
 

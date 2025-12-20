@@ -44,7 +44,7 @@ public sealed class DatabaseInventoryInspector
         var expected = GetExpectedObjects();
         if (expected.Count == 0)
         {
-            return InventoryVerification.Fail("No expected objects defined for this profile");
+            return InventoryVerification.Fail("Для этого профиля не описаны ожидаемые объекты");
         }
 
         var snapshot = await GetSnapshotAsync();
@@ -74,7 +74,7 @@ public sealed class DatabaseInventoryInspector
         }
         if (signatureIssues.Count > 0)
         {
-            parts.Add("Signature mismatches: " + string.Join("; ", signatureIssues));
+            parts.Add("Несовпадения сигнатур: " + string.Join("; ", signatureIssues));
         }
 
         return InventoryVerification.Fail(string.Join(" | ", parts));
@@ -90,10 +90,10 @@ public sealed class DatabaseInventoryInspector
     public static string FormatReminder(IEnumerable<DbObjectRequirement> missing)
     {
         var list = missing.ToList();
-        if (list.Count == 0) return "All objects are present.";
+        if (list.Count == 0) return "Все нужные объекты на месте.";
 
         var lines = list.Select((item, index) => $"{index + 1}. {item.ObjectType} {item.Name}");
-        return $"Missing required DB objects:\n{string.Join("\n", lines)}\nTODO: auto-create these objects via sql/ scripts before start.";
+        return $"Нет обязательных объектов в базе:\n{string.Join("\n", lines)}\nСоздайте их из sql/ перед запуском.";
     }
 
     private static DatabaseProfile DetectProfile(string connectionString)
@@ -350,14 +350,14 @@ public sealed class DatabaseInventoryInspector
             await cmd.ExecuteNonQueryAsync();
         }
 
-        // Ensure correct remote user.
+        // Держим в маппинге правильного пользователя к удалённому серверу.
         await using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = $"ALTER USER MAPPING FOR CURRENT_USER SERVER central_srv OPTIONS (SET user {PgLiteral(user)});";
             await cmd.ExecuteNonQueryAsync();
         }
 
-        // Ensure password from the user's connection string is applied even if the option didn't exist before.
+        // Применяем пароль из строки подключения, даже если опция отсутствовала раньше.
         if (!string.IsNullOrWhiteSpace(password))
         {
             try
@@ -501,7 +501,7 @@ public sealed class DatabaseInventoryInspector
         var cleaned = signature.ToLowerInvariant();
         cleaned = cleaned.Replace(" ", string.Empty, StringComparison.Ordinal);
 
-        // remove DEFAULT expressions while keeping the rest of the arg list
+        // Убираем DEFAULT из списка аргументов, остальное оставляем как есть.
         while (true)
         {
             var idx = cleaned.IndexOf("default", StringComparison.Ordinal);
@@ -512,8 +512,8 @@ public sealed class DatabaseInventoryInspector
                 : cleaned.Substring(0, idx);
         }
 
-        // pg_get_function_* for PROCEDURE includes IN markers in args. We don't store IN in expectations.
-        // We only strip it when it's the parameter mode keyword (our params are named p_*).
+        // pg_get_function_* для PROCEDURE пишет IN в аргументах, мы их не храним в эталоне.
+        // Чистим только ключевое слово режима параметра (наши параметры называются p_*).
         if (cleaned.StartsWith("inp", StringComparison.Ordinal))
         {
             cleaned = cleaned.Substring(2);
@@ -538,7 +538,7 @@ public sealed class DatabaseInventoryInspector
         }
         catch
         {
-            // ignored
+            // Проглатываем ошибку поиска каталога.
         }
 
         return null;

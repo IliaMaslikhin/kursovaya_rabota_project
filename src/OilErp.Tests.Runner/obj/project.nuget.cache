@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "xcm8ByddkyY=",
+  "dgSpecHash": "ngas+8t4/L4=",
   "success": true,
   "projectFilePath": "/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Tests.Runner/OilErp.Tests.Runner.csproj",
   "expectedPackageFiles": [
@@ -9,8 +9,7 @@
     "/Users/Ilia/.nuget/packages/npgsql/10.0.0-rc.1/npgsql.10.0.0-rc.1.nupkg.sha512",
     "/Users/Ilia/.nuget/packages/system.diagnostics.diagnosticsource/10.0.0-rc.1.25451.107/system.diagnostics.diagnosticsource.10.0.0-rc.1.25451.107.nupkg.sha512",
     "/Users/Ilia/.nuget/packages/microsoft.netcore.app.ref/8.0.20/microsoft.netcore.app.ref.8.0.20.nupkg.sha512",
-    "/Users/Ilia/.nuget/packages/microsoft.aspnetcore.app.ref/8.0.20/microsoft.aspnetcore.app.ref.8.0.20.nupkg.sha512",
-    "/Users/Ilia/.nuget/packages/microsoft.netcore.app.host.osx-arm64/8.0.20/microsoft.netcore.app.host.osx-arm64.8.0.20.nupkg.sha512"
+    "/Users/Ilia/.nuget/packages/microsoft.aspnetcore.app.ref/8.0.20/microsoft.aspnetcore.app.ref.8.0.20.nupkg.sha512"
   ],
   "logs": []
 }

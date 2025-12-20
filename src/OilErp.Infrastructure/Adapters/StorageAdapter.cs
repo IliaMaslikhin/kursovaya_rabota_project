@@ -50,7 +50,7 @@ public class StorageAdapter : DbClientBase
 
             var (schema, name) = SplitQualifiedName(spec.OperationName);
             var conn = await GetConnectionAsync(ct);
-            await using var _ = conn.Item2; // ensures disposal if we opened a new connection
+            await using var _ = conn.Item2; // следит, чтобы временное соединение закрылось
             var npg = conn.Item1;
 
             var meta = await GetRoutineMetadataAsync(schema, name, npg, ct);
@@ -318,7 +318,7 @@ order by p.oid desc limit 1";
         if (!await reader.ReadAsync(ct))
             throw new InvalidOperationException($"Routine not found: {schema}.{name}");
 
-        var prokind = reader.GetFieldValue<char>(0); // f=function, p=procedure
+        var prokind = reader.GetFieldValue<char>(0); // f=function, p=procedure (типы из каталога)
         var proretset = reader.GetBoolean(1);
         var rettype = reader.GetString(2);
         var pronargs = reader.GetInt16(3);
@@ -376,7 +376,7 @@ order by p.oid desc limit 1";
                 }
                 catch
                 {
-                    // ignore
+                    // игнорируем попытку конвертации, идём дальше
                 }
             }
         }
@@ -408,7 +408,7 @@ order by p.oid desc limit 1";
     }
 
     /// <summary>
-    /// Обертка над NpgsqlTransaction с асинхронными Commit/Rollback и сейвпоинтами
+    /// Простая обертка над NpgsqlTransaction: коммит, откат и автоматический rollback при Dispose.
     /// </summary>
     private sealed class PgTransactionScope : IStorageTransaction
     {
@@ -436,29 +436,6 @@ order by p.oid desc limit 1";
             if (_completed) return;
             await Transaction.RollbackAsync(ct);
             _completed = true;
-        }
-
-        public async Task CreateSavepointAsync(string name, CancellationToken ct = default)
-        {
-            await ExecuteAsync($"SAVEPOINT \"{name}\"", ct);
-        }
-
-        public async Task RollbackToSavepointAsync(string name, CancellationToken ct = default)
-        {
-            await ExecuteAsync($"ROLLBACK TO SAVEPOINT \"{name}\"", ct);
-        }
-
-        public async Task ReleaseSavepointAsync(string name, CancellationToken ct = default)
-        {
-            await ExecuteAsync($"RELEASE SAVEPOINT \"{name}\"", ct);
-        }
-
-        private async Task ExecuteAsync(string sql, CancellationToken ct)
-        {
-            await using var cmd = Connection.CreateCommand();
-            cmd.Transaction = Transaction;
-            cmd.CommandText = sql;
-            await cmd.ExecuteNonQueryAsync(ct);
         }
 
         public async ValueTask DisposeAsync()

@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Npgsql;
 using OilErp.Core.Dto;
 using OilErp.Core.Util;
+using OilErp.Tests.Runner;
 using OilErp.Tests.Runner.Util;
 using AnpzInsertService = OilErp.Core.Services.Plants.ANPZ.SpInsertMeasurementBatchService;
 using KrnpzInsertService = OilErp.Core.Services.Plants.KRNPZ.SpInsertMeasurementBatchService;

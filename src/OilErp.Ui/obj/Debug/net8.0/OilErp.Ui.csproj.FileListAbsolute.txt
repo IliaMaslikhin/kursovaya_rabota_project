@@ -82,3 +82,5 @@
 /Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Ui/bin/Debug/net8.0/System.Diagnostics.DiagnosticSource.dll
 /Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Ui/bin/Debug/net8.0/OilErp.Infrastructure.dll
 /Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Ui/bin/Debug/net8.0/OilErp.Infrastructure.pdb
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Ui/bin/Debug/net8.0/OilErp.Tests.Runner.dll
+/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Ui/bin/Debug/net8.0/OilErp.Tests.Runner.pdb

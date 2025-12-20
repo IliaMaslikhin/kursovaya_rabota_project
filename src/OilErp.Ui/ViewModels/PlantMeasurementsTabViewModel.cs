@@ -17,6 +17,7 @@ using OilErp.Ui.Services;
 using OilErp.Ui.Views;
 using AnpzInsertService = OilErp.Core.Services.Plants.ANPZ.SpInsertMeasurementBatchService;
 using KrnpzInsertService = OilErp.Core.Services.Plants.KRNPZ.SpInsertMeasurementBatchService;
+using System.Text.RegularExpressions;
 
 namespace OilErp.Ui.ViewModels;
 
@@ -101,7 +102,6 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
     partial void OnSelectedRowChanged(PlantMeasurementEquipmentRowViewModel? value)
     {
         AddMeasurementCommand.NotifyCanExecuteChanged();
-        ShowHistoryCommand.NotifyCanExecuteChanged();
         EditLastMeasurementCommand.NotifyCanExecuteChanged();
         DeleteLastMeasurementCommand.NotifyCanExecuteChanged();
         OpenTransferCommand.NotifyCanExecuteChanged();
@@ -130,7 +130,6 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
     partial void OnIsBusyChanged(bool value)
     {
         AddMeasurementCommand.NotifyCanExecuteChanged();
-        ShowHistoryCommand.NotifyCanExecuteChanged();
         EditLastMeasurementCommand.NotifyCanExecuteChanged();
         DeleteLastMeasurementCommand.NotifyCanExecuteChanged();
         OpenTransferCommand.NotifyCanExecuteChanged();
@@ -151,7 +150,6 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
 
     private bool CanAddMeasurement() => !IsBusy && SelectedRow is not null;
     private bool CanEditOrDeleteMeasurement() => !IsBusy && SelectedRow is not null;
-    private bool CanShowHistory() => !IsBusy && SelectedRow is not null;
     private bool CanOpenTransfer() => !IsBusy;
 
     [RelayCommand]
@@ -212,10 +210,13 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
         var assetCode = selected.Code.Trim();
         var baseTimestampUtc = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
 
+        var nextLabel = await GenerateNextLabelAsync(assetCode);
         var vm = new PlantMeasurementEditWindowViewModel(
             "Добавить замер",
             PlantCode,
-            assetCode);
+            assetCode,
+            nextLabel,
+            isLabelReadOnly: true);
 
         var dialog = new PlantMeasurementEditWindow { DataContext = vm };
         var result = await UiDialogHost.ShowDialogAsync<PlantMeasurementEditResult?>(dialog);
@@ -270,23 +271,6 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
         }
     }
 
-    [RelayCommand(CanExecute = nameof(CanShowHistory))]
-    public async Task ShowHistoryAsync()
-    {
-        var selected = SelectedRow;
-        if (selected is null)
-        {
-            StatusMessage = "Выберите оборудование, чтобы открыть историю.";
-            return;
-        }
-
-        var assetCode = selected.Code.Trim();
-        var vm = new PlantMeasurementHistoryWindowViewModel(PlantCode, assetCode, connectionString);
-        var dialog = new PlantMeasurementHistoryWindow { DataContext = vm };
-        _ = vm.RefreshAsync();
-        await UiDialogHost.ShowDialogAsync<bool?>(dialog);
-    }
-
     [RelayCommand(CanExecute = nameof(CanOpenTransfer))]
     public async Task OpenTransferAsync()
     {
@@ -323,7 +307,7 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
                 "Изменить последний замер",
                 PlantCode,
                 assetCode,
-                initialLabel: latest.Label,
+                latest.Label,
                 initialThickness: (double)latest.Thickness,
                 initialNote: latest.Note,
                 isLabelReadOnly: true);
@@ -786,6 +770,40 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
         var note = reader.IsDBNull(4) ? null : reader.GetString(4);
 
         return new MeasurementRow(id, label, ts, thickness, note);
+    }
+
+    private static readonly Regex LabelRegex = new(@"^T(?<n>\d+)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private async Task<string> GenerateNextLabelAsync(string assetCode)
+    {
+        await using var conn = new NpgsqlConnection(connectionString);
+        await conn.OpenAsync();
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+                          select mp.label
+                          from public.measurement_points mp
+                          join public.assets_local a on a.id = mp.asset_id
+                          where a.asset_code = @code
+                          order by mp.id
+                          """;
+        cmd.Parameters.AddWithValue("code", assetCode);
+
+        var max = 0;
+        await using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            if (reader.IsDBNull(0)) continue;
+            var lbl = reader.GetString(0);
+            var match = LabelRegex.Match(lbl.Trim());
+            if (match.Success && int.TryParse(match.Groups["n"].Value, out var num))
+            {
+                if (num > max) max = num;
+            }
+        }
+
+        var next = Math.Max(1, max + 1);
+        return $"T{next}";
     }
 
     private static async Task UpdateMeasurementAsync(NpgsqlConnection conn, NpgsqlTransaction tx, long id, double thickness, string? note)

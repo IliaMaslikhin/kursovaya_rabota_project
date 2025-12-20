@@ -10,7 +10,7 @@ public sealed partial class CentralMeasurementEditWindowViewModel : ObservableOb
     public CentralMeasurementEditWindowViewModel(
         string title,
         string equipmentCode,
-        string? initialLabel = null,
+        string label,
         double? initialThickness = null,
         string? initialNote = null,
         DateTime? initialDateLocal = null,
@@ -20,7 +20,7 @@ public sealed partial class CentralMeasurementEditWindowViewModel : ObservableOb
         EquipmentCode = equipmentCode;
 
         dateText = (initialDateLocal ?? DateTime.Now.Date).ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
-        label = string.IsNullOrWhiteSpace(initialLabel) ? "T1" : initialLabel.Trim();
+        Label = string.IsNullOrWhiteSpace(label) ? "T1" : label.Trim();
         thicknessText = (initialThickness ?? 12.0).ToString("0.###", CultureInfo.InvariantCulture);
         note = string.IsNullOrWhiteSpace(initialNote) ? null : initialNote.Trim();
         IsLabelReadOnly = isLabelReadOnly;
@@ -33,7 +33,7 @@ public sealed partial class CentralMeasurementEditWindowViewModel : ObservableOb
 
     [ObservableProperty] private string dateText;
 
-    [ObservableProperty] private string label;
+    public string Label { get; }
 
     [ObservableProperty] private string thicknessText;
 
@@ -46,24 +46,23 @@ public sealed partial class CentralMeasurementEditWindowViewModel : ObservableOb
     public event Action<CentralMeasurementEditResult?>? RequestClose;
 
     private bool CanSave() =>
-        !string.IsNullOrWhiteSpace(Label)
-        && TryParseLocalDate(DateText, out _)
+        TryParseLocalDate(DateText, out _)
         && TryParseThickness(ThicknessText, out var thk)
         && thk > 0;
 
     [RelayCommand(CanExecute = nameof(CanSave))]
     private void Save()
     {
-        if (string.IsNullOrWhiteSpace(Label))
+        if (!TryParseLocalDate(DateText, out var dateLocal))
         {
-            StatusMessage = "Укажите метку точки (label).";
+            StatusMessage = "Дата должна быть в формате dd.MM.yyyy (например: 18.12.2025).";
             SaveCommand.NotifyCanExecuteChanged();
             return;
         }
 
-        if (!TryParseLocalDate(DateText, out var dateLocal))
+        if (string.IsNullOrWhiteSpace(Label))
         {
-            StatusMessage = "Дата должна быть в формате dd.MM.yyyy (например: 18.12.2025).";
+            StatusMessage = "Не получилось сгенерировать метку точки.";
             SaveCommand.NotifyCanExecuteChanged();
             return;
         }
@@ -98,11 +97,6 @@ public sealed partial class CentralMeasurementEditWindowViewModel : ObservableOb
     }
 
     partial void OnDateTextChanged(string value)
-    {
-        SaveCommand.NotifyCanExecuteChanged();
-    }
-
-    partial void OnLabelChanged(string value)
     {
         SaveCommand.NotifyCanExecuteChanged();
     }

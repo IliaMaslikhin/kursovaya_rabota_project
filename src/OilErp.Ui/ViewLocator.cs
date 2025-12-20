@@ -7,7 +7,7 @@ using OilErp.Ui.ViewModels;
 namespace OilErp.Ui;
 
 /// <summary>
-/// Given a view model, returns the corresponding view if possible.
+/// Получает вью-модель и пытается вернуть подходящее представление.
 /// </summary>
 [RequiresUnreferencedCode(
     "Default implementation of ViewLocator involves reflection which may be trimmed away.",

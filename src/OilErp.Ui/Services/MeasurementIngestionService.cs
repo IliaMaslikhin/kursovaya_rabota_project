@@ -12,8 +12,8 @@ using OilErp.Ui.Models;
 namespace OilErp.Ui.Services;
 
 /// <summary>
-/// Coordinates measurement ingestion into plant procedures using existing Core services.
-/// Falls back to local-only status when the storage port is offline.
+/// Складывает замеры в заводские процедуры через сервисы Core.
+/// Если хранилище недоступно, падает с сообщением — офлайн-режима нет.
 /// </summary>
 public sealed class MeasurementIngestionService
 {

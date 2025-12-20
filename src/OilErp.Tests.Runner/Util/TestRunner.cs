@@ -6,22 +6,22 @@ using System.Threading.Tasks;
 namespace OilErp.Tests.Runner.Util;
 
 /// <summary>
-/// Test scenario result
+/// Результат выполнения сценария.
 /// </summary>
-/// <param name="Name">Scenario name</param>
-/// <param name="Success">Whether the scenario succeeded</param>
-/// <param name="Error">Error message if failed</param>
-/// <param name="Skipped">True when the scenario was intentionally skipped</param>
+/// <param name="Name">Название сценария</param>
+/// <param name="Success">true, если прошёл</param>
+/// <param name="Error">Текст ошибки, если не прошёл</param>
+/// <param name="Skipped">true, если сценарий пропущен</param>
 public record TestResult(string Name, bool Success, string? Error = null, bool Skipped = false);
 
 /// <summary>
-/// Test scenario delegate
+/// Делегат сценария.
 /// </summary>
-/// <returns>Test result</returns>
+/// <returns>Результат выполнения</returns>
 public delegate Task<TestResult> TestScenario();
 
 /// <summary>
-/// Defines when a scenario should be executed.
+/// Когда запускать сценарий.
 /// </summary>
 public enum TestRunScope
 {
@@ -30,7 +30,7 @@ public enum TestRunScope
 }
 
 /// <summary>
-/// Test runner harness for registering and running named scenarios
+/// Обвязка для регистрации и запуска сценариев.
 /// </summary>
 public record TestScenarioDefinition(
     string Name,
@@ -42,7 +42,7 @@ public record TestScenarioDefinition(
     TestRunScope Scope = TestRunScope.Always);
 
 /// <summary>
-/// Test runner harness for registering and running named scenarios
+/// Запускает все зарегистрированные сценарии и печатает результат.
 /// </summary>
 public class TestRunner
 {
@@ -51,16 +51,16 @@ public class TestRunner
     public string? MachineCode { get; set; }
 
     /// <summary>
-    /// Registers a test scenario
+    /// Регистрирует сценарий.
     /// </summary>
-    /// <param name="name">Scenario name</param>
-    /// <param name="scenario">Scenario implementation</param>
+    /// <param name="name">Название</param>
+    /// <param name="scenario">Реализация</param>
     public void Register(TestScenarioDefinition definition) => _scenarios.Add(definition);
 
     /// <summary>
-    /// Runs all registered scenarios
+    /// Запускает все зарегистрированные сценарии.
     /// </summary>
-    /// <returns>Collection of test results</returns>
+    /// <returns>Список результатов</returns>
     public async Task<IReadOnlyList<(TestScenarioDefinition Definition, TestResult Result)>> RunAllAsync()
     {
         var results = new List<(TestScenarioDefinition, TestResult)>(_scenarios.Count);
@@ -88,7 +88,7 @@ public class TestRunner
     }
 
     /// <summary>
-    /// Runs all scenarios and prints results
+    /// Запускает сценарии и печатает итоги.
     /// </summary>
     public async Task RunAndPrintAsync()
     {

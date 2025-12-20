@@ -1,12 +1,12 @@
 namespace OilErp.Core.Contracts;
 
 /// <summary>
-/// Core kernel interface providing access to storage operations
+/// Ядро, которое отдаёт доступ к хранилищу.
 /// </summary>
 public interface ICoreKernel
 {
     /// <summary>
-    /// Gets the storage port for database operations
+    /// Хранилище, через которое ходим в базу.
     /// </summary>
     IStoragePort Storage { get; }
 }

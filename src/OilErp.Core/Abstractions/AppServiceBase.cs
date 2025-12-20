@@ -4,19 +4,19 @@ using OilErp.Core.Dto;
 namespace OilErp.Core.Abstractions;
 
 /// <summary>
-/// Base class for application service implementations
+/// Базовый класс для сервисов: держит ссылку на хранилище и общую нормализацию ввода.
 /// </summary>
 public abstract class AppServiceBase
 {
     /// <summary>
-    /// Storage port for database operations
+    /// Хранилище, через которое сервис ходит в базу.
     /// </summary>
     protected readonly IStoragePort Storage;
 
     /// <summary>
-    /// Initializes a new instance of the AppServiceBase class
+    /// Создаёт сервис и проверяет, что хранилище передано.
     /// </summary>
-    /// <param name="storage">Storage port instance</param>
+    /// <param name="storage">Конкретная реализация хранилища</param>
     protected AppServiceBase(IStoragePort storage)
     {
         Storage = storage ?? throw new ArgumentNullException(nameof(storage));

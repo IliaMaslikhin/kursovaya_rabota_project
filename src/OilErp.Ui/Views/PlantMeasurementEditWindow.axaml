@@ -32,9 +32,13 @@
             <StackPanel Spacing="10">
                 <Grid ColumnDefinitions="*,*"
                       ColumnSpacing="10">
-                    <TextBox Text="{Binding Label}"
-                             IsReadOnly="{Binding IsLabelReadOnly}"
-                             Watermark="Метка точки (label)"/>
+                    <StackPanel>
+                        <TextBlock Text="Точка"
+                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                        <TextBlock Text="{Binding Label}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Brush.TextPrimary}"/>
+                    </StackPanel>
                     <TextBox Grid.Column="1"
                              Text="{Binding ThicknessText}"
                              Watermark="Толщина (например: 12.5)"/>

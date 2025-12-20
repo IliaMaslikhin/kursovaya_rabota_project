@@ -690,6 +690,20 @@
         "runtime": {
           "bin/placeholder/OilErp.Infrastructure.dll": {}
         }
+      },
+      "OilErp.Tests.Runner/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v8.0",
+        "dependencies": {
+          "OilErp.Core": "1.0.0",
+          "OilErp.Infrastructure": "1.0.0"
+        },
+        "compile": {
+          "bin/placeholder/OilErp.Tests.Runner.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/OilErp.Tests.Runner.dll": {}
+        }
       }
     }
   },
@@ -1702,6 +1716,11 @@
       "type": "project",
       "path": "../OilErp.Infrastructure/OilErp.Infrastructure.csproj",
       "msbuildProject": "../OilErp.Infrastructure/OilErp.Infrastructure.csproj"
+    },
+    "OilErp.Tests.Runner/1.0.0": {
+      "type": "project",
+      "path": "../OilErp.Tests.Runner/OilErp.Tests.Runner.csproj",
+      "msbuildProject": "../OilErp.Tests.Runner/OilErp.Tests.Runner.csproj"
     }
   },
   "projectFileDependencyGroups": {
@@ -1714,7 +1733,8 @@
       "CommunityToolkit.Mvvm >= 8.2.1",
       "Npgsql >= 10.0.0-rc.1",
       "OilErp.Core >= 1.0.0",
-      "OilErp.Infrastructure >= 1.0.0"
+      "OilErp.Infrastructure >= 1.0.0",
+      "OilErp.Tests.Runner >= 1.0.0"
     ]
   },
   "packageFolders": {
@@ -1747,6 +1767,9 @@
             },
             "/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/OilErp.Infrastructure.csproj": {
               "projectPath": "/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Infrastructure/OilErp.Infrastructure.csproj"
+            },
+            "/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Tests.Runner/OilErp.Tests.Runner.csproj": {
+              "projectPath": "/Users/Ilia/RiderProjects/KursovayaRabotaProject/kursovaya_rabota_project/src/OilErp.Tests.Runner/OilErp.Tests.Runner.csproj"
             }
           }
         }

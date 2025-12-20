@@ -8,7 +8,7 @@ using OilErp.Tests.Runner.Util;
 namespace OilErp.Tests.Runner.Smoke;
 
 /// <summary>
-/// Validation smoke tests: schema inventory and reminder stubs for missing objects.
+/// Смоук-проверки валидации: инвентаризация схемы и заглушки напоминаний.
 /// </summary>
 public class ValidationSmokeTests
 {
@@ -61,7 +61,8 @@ public class ValidationSmokeTests
     }
 
     /// <summary>
-    /// Verifies the reminder formatting for missing objects (stub per instructions to auto-create later).
+    /// Проверяет формат текста-напоминания, когда в базе нет обязательных объектов.
+    /// Важно: тут используются выдуманные имена, это НЕ реальные функции/триггеры.
     /// </summary>
     public Task<TestResult> TestMissingObjectReminderFormatting()
     {
@@ -70,18 +71,17 @@ public class ValidationSmokeTests
         {
             var sampleMissing = new[]
             {
-                new DbObjectRequirement("function", "public.fn_demo"),
-                new DbObjectRequirement("trigger", "public.trg_demo")
+                new DbObjectRequirement("function", "public.fn_пример_для_формата"),
+                new DbObjectRequirement("trigger", "public.trg_пример_для_формата")
             };
             var reminder = DatabaseInventoryInspector.FormatReminder(sampleMissing);
-            if (!reminder.Contains("TODO", StringComparison.OrdinalIgnoreCase) ||
-                !reminder.Contains("fn_demo", StringComparison.Ordinal) ||
-                !reminder.Contains("trg_demo", StringComparison.Ordinal))
+            if (!reminder.Contains("fn_пример_для_формата", StringComparison.Ordinal) ||
+                !reminder.Contains("trg_пример_для_формата", StringComparison.Ordinal) ||
+                !reminder.Contains("Создайте", StringComparison.OrdinalIgnoreCase))
             {
                 return Task.FromResult(new TestResult(testName, false, "Reminder template missing required details"));
             }
 
-            Console.WriteLine($"[Валидация] Пример напоминания: {reminder}");
             return Task.FromResult(new TestResult(testName, true));
         }
         catch (Exception ex)

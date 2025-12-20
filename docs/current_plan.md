@@ -102,3 +102,67 @@
 - [x] Central: вкладка “Замеры” должна показывать оборудование со всех заводов + сортировка/группировка как на заводах.
   - Сделано: загрузка оборудования через FULL JOIN `assets_global` и last_batch; добавлены сортировка/группировка и отображение завода; добавление замеров ограничено только `CENTRAL`.
   - Где править: `src/OilErp.Ui/ViewModels/CentralMeasurementsTabViewModel.cs`, `src/OilErp.Ui/Views/MainWindow.axaml`
+
+## P4 — рефакторинг: уменьшить количество файлов (manual)
+
+Цель: **сократить число файлов**, не превращая проект в “один гигантский файл”. Правило: объединяем пачки мелких файлов (≈ до 150 строк), если итоговый файл получается **разумным** (обычно до ~400–600 строк) и логически цельным.
+
+### Общие правила (как делать)
+- [ ] Договориться о лимитах: условно “файл до 600 строк ок”, “файл >1000 строк — лучше не делать”.
+- [ ] При объединении сохранять namespace (по возможности), чтобы не делать массовый рефакторинг `using`.
+- [ ] В начале объединённого файла добавить шапку‑комментарий “Merged from: ...” со списком исходных файлов.
+- [ ] После каждого шага (опционально): `dotnet build src/OilErp.sln -c Release --no-restore` или хотя бы сборка 1 проекта, чтобы быстро ловить ошибки.
+
+### `OilErp.Core` — максимум выигрыша (много мелких DTO/Service)
+- [x] Объединить DTO из `src/OilErp.Core/Dto/*` в 2–3 файла:
+  - пример разбиения: `Specs.cs` (CommandSpec/QuerySpec/OperationResultOfT), `AnalyticsDtos.cs` (EvalRiskRowDto/PlantCrStatDto/MeasurementPointDto), `DatabaseProfile.cs` оставить отдельным или тоже перенести.
+  - удалить исходные файлы после переноса.
+- [x] Объединить central‑сервисы в 1 файл `src/OilErp.Core/Services/Central/CentralServices.cs`:
+  - перенести классы из `src/OilErp.Core/Services/Central/Fn*.cs` и `src/OilErp.Core/Services/Central/Sp*.cs`;
+  - удалить исходные файлы.
+- [x] Объединить plant‑сервисы в 2 файла (без смены namespace):
+  - `src/OilErp.Core/Services/Plants/ANPZ/AnpzServices.cs` (оба `SpInsertMeasurementBatch*Service`);
+  - `src/OilErp.Core/Services/Plants/KRNPZ/KrnpzServices.cs` (оба `SpInsertMeasurementBatch*Service`);
+  - удалить исходные файлы.
+- [x] Объединить DTO из `src/OilErp.Core/Services/Dtos/*` в 1 файл и убрать папку `Services/Dtos`:
+  - вариант: перенести в `src/OilErp.Core/Dto/ServiceDtos.cs` (тогда папку `Services/Dtos` можно удалить полностью).
+
+### `OilErp.Infrastructure` — точечно
+- [x] Сжать `src/OilErp.Infrastructure/Config/StorageConfig.cs` + `src/OilErp.Infrastructure/Config/StorageConfigProvider.cs` в один файл (например `StorageConfig.cs`) и удалить второй.
+- [x] Удалить пустую папку `src/OilErp.Infrastructure/Logging` (если реально нигде не используется).
+
+### `OilErp.Ui` — убрать “мелочь” (без трогания больших VM)
+- [x] Объединить модели замеров в 1 файл:
+  - `src/OilErp.Ui/Models/AddMeasurementRequest.cs`
+  - `src/OilErp.Ui/Models/MeasurementSeries.cs`
+  - `src/OilErp.Ui/Models/MeasurementSubmissionResult.cs`
+  - итог: один файл (например `src/OilErp.Ui/Models/MeasurementModels.cs`), удалить остальные.
+- [x] Объединить конвертеры в 1 файл и (если хочется) убрать папку:
+  - `src/OilErp.Ui/Converters/BoolInvertConverter.cs`
+  - `src/OilErp.Ui/Converters/DatabaseProfileDisplayConverter.cs`
+  - итог: `src/OilErp.Ui/Converters/Converters.cs` (или один файл в корне `src/OilErp.Ui/Converters.cs`), удалить исходные.
+- [x] Объединить маленькие VM в “Common” файл:
+  - `src/OilErp.Ui/ViewModels/ViewModelBase.cs`
+  - `src/OilErp.Ui/ViewModels/ThemeOption.cs` (можно перенести прямо в `ThemePalette.cs`)
+  - `src/OilErp.Ui/ViewModels/ConfirmDialogViewModel.cs`
+  - итог: например `src/OilErp.Ui/ViewModels/CommonViewModels.cs`, удалить исходные.
+- [x] Сжать connect‑VM в один файл:
+  - `src/OilErp.Ui/ViewModels/ConnectWindowViewModel.cs`
+  - `src/OilErp.Ui/ViewModels/ConnectionFormViewModel.cs`
+  - итог: `src/OilErp.Ui/ViewModels/ConnectViewModels.cs`, удалить исходные.
+- [x] Убрать файл‑однострочник `src/OilErp.Ui/Services/AppLogger.cs`:
+  - перенести `global using AppLogger = ...` в любой существующий “верхний” `.cs` (например `src/OilErp.Ui/Program.cs` или `src/OilErp.Ui/Services/KernelGateway.cs`);
+  - удалить `src/OilErp.Ui/Services/AppLogger.cs`.
+- [x] Объединить UI‑хелперы диалогов в 1 файл:
+  - `src/OilErp.Ui/Services/UiDialogHost.cs`
+  - `src/OilErp.Ui/Services/UiFilePicker.cs`
+  - итог: `src/OilErp.Ui/Services/UiDialogs.cs`, удалить исходные.
+
+### `OilErp.Tests.Runner` — укрупнить смоуки/фейки
+- [x] Объединить мелкие смоук‑классы в 1 файл:
+  - кандидаты: `src/OilErp.Tests.Runner/Smoke/AsyncSmokeTests.cs`, `src/OilErp.Tests.Runner/Smoke/NegativeSmokeTests.cs`, `src/OilErp.Tests.Runner/Smoke/BootstrapSmokeTests.cs`
+  - вариант: перенести в `src/OilErp.Tests.Runner/Smoke/ExtendedSmokeTests.cs` и удалить исходные файлы.
+- [x] Объединить фейковые порты в 1 файл:
+  - `src/OilErp.Tests.Runner/TestDoubles/FakeStoragePort.cs`
+  - `src/OilErp.Tests.Runner/TestDoubles/TransactionalFakeStoragePort.cs`
+  - итог: оставить один файл (например `FakeStoragePort.cs`), второй удалить.

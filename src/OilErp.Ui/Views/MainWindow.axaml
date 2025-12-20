@@ -244,9 +244,6 @@
                                                 Classes="primary"
                                                 ToolTip.Tip="Выберите оборудование и добавьте замер (central)"
                                                 Command="{Binding AddMeasurementCommand}"/>
-                                        <Button Content="История"
-                                                ToolTip.Tip="Открыть историю замеров для выбранного оборудования"
-                                                Command="{Binding ShowHistoryCommand}"/>
                                         <Button Content="Импорт/Экспорт"
                                                 ToolTip.Tip="Экспорт/импорт замеров по всем заводам (CENTRAL)"
                                                 Command="{Binding OpenTransferCommand}"/>
@@ -425,41 +422,135 @@
                             <ScrollViewer VerticalScrollBarVisibility="Auto">
                                 <StackPanel Spacing="12"
                                             Margin="8">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Button Content="Обновить" Command="{Binding RefreshCommand}"/>
+                                    <WrapPanel>
+                                        <WrapPanel.Styles>
+                                            <Style Selector="WrapPanel > :is(Control)">
+                                                <Setter Property="Margin" Value="0,0,8,8"/>
+                                            </Style>
+                                        </WrapPanel.Styles>
+                                        <Button Content="Обновить"
+                                                Command="{Binding RefreshCommand}"/>
+                                        <TextBlock Text="Политика для всех заводов:"
+                                                   Foreground="{DynamicResource Brush.TextSecondary}"
+                                                   VerticalAlignment="Center"/>
+                                        <ComboBox Width="220"
+                                                  ItemsSource="{Binding PolicyNames}"
+                                                  SelectedItem="{Binding SelectedPolicyForAll}"/>
+                                        <Button Content="Применить ко всем"
+                                                Command="{Binding ApplyPolicyToAllCommand}"/>
+                                        <ProgressBar IsIndeterminate="True"
+                                                     IsVisible="{Binding IsBusy}"
+                                                     Width="90"
+                                                     Height="4"
+                                                     VerticalAlignment="Center"/>
                                         <TextBlock Text="{Binding StatusMessage}"
                                                    Foreground="{DynamicResource Brush.TextSecondary}"
                                                    VerticalAlignment="Center"
                                                    TextWrapping="Wrap"/>
-                                    </StackPanel>
+                                    </WrapPanel>
 
-                                    <ItemsControl ItemsSource="{Binding Items}">
+                                    <ItemsControl ItemsSource="{Binding PlantGroups}">
                                         <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:AnalyticsRowViewModel">
+                                            <DataTemplate x:DataType="vm:AnalyticsPlantGroupViewModel">
                                                 <Border Padding="10"
-                                                        Margin="0 0 0 8"
+                                                        Margin="0 0 0 10"
                                                         CornerRadius="8"
-                                                        Background="{DynamicResource Brush.CardBackground}"
+                                                        Background="{DynamicResource Brush.PanelBackground}"
                                                         BorderBrush="{DynamicResource Brush.Border}"
                                                         BorderThickness="1">
-                                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto"
-                                                          ColumnSpacing="12">
-                                                        <TextBlock Text="{Binding AssetCode}"
-                                                                   FontWeight="SemiBold"
-                                                                   Foreground="{DynamicResource Brush.TextPrimary}"/>
-                                                        <TextBlock Grid.Column="1"
-                                                                   Text="{Binding Plant}"
-                                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
-                                                        <TextBlock Grid.Column="2"
-                                                                   Text="{Binding CrDisplay}"
-                                                                   Foreground="{DynamicResource Brush.TextPrimary}"/>
-                                                        <TextBlock Grid.Column="3"
-                                                                   Text="{Binding Risk}"
-                                                                   Foreground="{DynamicResource Brush.TextPrimary}"/>
-                                                        <TextBlock Grid.Column="4"
-                                                                   Text="{Binding UpdatedAt}"
-                                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
-                                                    </Grid>
+                                                    <StackPanel Spacing="10">
+                                                        <WrapPanel>
+                                                            <WrapPanel.Styles>
+                                                                <Style Selector="WrapPanel > :is(Control)">
+                                                                    <Setter Property="Margin" Value="0,0,8,8"/>
+                                                                </Style>
+                                                            </WrapPanel.Styles>
+                                                            <TextBlock Text="{Binding Title}"
+                                                                       FontWeight="SemiBold"
+                                                                       Foreground="{DynamicResource Brush.TextPrimary}"
+                                                                       VerticalAlignment="Center"/>
+                                                            <TextBlock Text="{Binding SummaryText}"
+                                                                       Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                       VerticalAlignment="Center"/>
+                                                            <TextBlock Text="Политика:"
+                                                                       Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                       VerticalAlignment="Center"/>
+                                                            <ComboBox Width="220"
+                                                                      ItemsSource="{Binding PolicyNames}"
+                                                                      SelectedItem="{Binding SelectedPolicyName}"/>
+                                                            <Button Content="Применить"
+                                                                    Command="{Binding ApplyPolicyCommand}"/>
+                                                            <Button Content="Обновить"
+                                                                    Command="{Binding RefreshCommand}"/>
+                                                            <ProgressBar IsIndeterminate="True"
+                                                                         IsVisible="{Binding IsBusy}"
+                                                                         Width="90"
+                                                                         Height="4"
+                                                                         VerticalAlignment="Center"/>
+                                                            <TextBlock Text="{Binding StatusMessage}"
+                                                                       Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                       VerticalAlignment="Center"
+                                                                       TextWrapping="Wrap"/>
+                                                        </WrapPanel>
+
+                                                        <Border Background="{DynamicResource Brush.CardBackground}"
+                                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                                BorderThickness="1"
+                                                                CornerRadius="6">
+                                                            <StackPanel>
+                                                                <Border Padding="10,8"
+                                                                        Background="{DynamicResource Brush.PanelBackground}">
+                                                                    <Grid ColumnDefinitions="2*,Auto,Auto,Auto"
+                                                                          ColumnSpacing="12">
+                                                                        <TextBlock Text="Актив"
+                                                                                   FontWeight="SemiBold"
+                                                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                                        <TextBlock Grid.Column="1"
+                                                                                   Text="CR"
+                                                                                   FontWeight="SemiBold"
+                                                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                                        <TextBlock Grid.Column="2"
+                                                                                   Text="Риск"
+                                                                                   FontWeight="SemiBold"
+                                                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                                        <TextBlock Grid.Column="3"
+                                                                                   Text="Обновлено"
+                                                                                   FontWeight="SemiBold"
+                                                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                                    </Grid>
+                                                                </Border>
+
+                                                                <ItemsControl ItemsSource="{Binding Items}">
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate x:DataType="vm:AnalyticsRowViewModel">
+                                                                            <Border BorderBrush="{DynamicResource Brush.Border}"
+                                                                                    BorderThickness="0,0,0,1"
+                                                                                    Padding="10,8">
+                                                                                <Grid ColumnDefinitions="2*,Auto,Auto,Auto"
+                                                                                      ColumnSpacing="12">
+                                                                                    <TextBlock Text="{Binding AssetCode}"
+                                                                                               Foreground="{DynamicResource Brush.TextPrimary}"
+                                                                                               TextWrapping="NoWrap"/>
+                                                                                    <TextBlock Grid.Column="1"
+                                                                                               Text="{Binding CrDisplay}"
+                                                                                               Foreground="{DynamicResource Brush.TextPrimary}"
+                                                                                               TextWrapping="NoWrap"/>
+                                                                                    <TextBlock Grid.Column="2"
+                                                                                               Text="{Binding Risk}"
+                                                                                               Foreground="{DynamicResource Brush.TextPrimary}"
+                                                                                               TextWrapping="NoWrap"/>
+                                                                                    <TextBlock Grid.Column="3"
+                                                                                               Text="{Binding UpdatedAt}"
+                                                                                               Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                                               TextWrapping="NoWrap"/>
+                                                                                </Grid>
+                                                                            </Border>
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </StackPanel>
                                                 </Border>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
@@ -834,9 +925,6 @@
                                                 Classes="primary"
                                                 ToolTip.Tip="Выберите оборудование и добавьте замер"
                                                 Command="{Binding AddMeasurementCommand}"/>
-                                        <Button Content="История"
-                                                ToolTip.Tip="История замеров выбранного оборудования"
-                                                Command="{Binding ShowHistoryCommand}"/>
                                         <Button Content="Импорт/Экспорт"
                                                 ToolTip.Tip="Экспорт/импорт замеров по заводу"
                                                 Command="{Binding OpenTransferCommand}"/>

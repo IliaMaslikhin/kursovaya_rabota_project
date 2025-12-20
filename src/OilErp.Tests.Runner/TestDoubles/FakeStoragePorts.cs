@@ -3,52 +3,31 @@ using OilErp.Core.Dto;
 
 namespace OilErp.Tests.Runner.TestDoubles;
 
-/// <summary>
-/// In-memory fake implementation of IStoragePort for testing
-/// </summary>
+/// <summary>Простая фейковая реализация IStoragePort для тестов в памяти.</summary>
 public class FakeStoragePort : IStoragePort
 {
     private readonly List<QuerySpec> _queryHistory = new();
     private readonly List<CommandSpec> _commandHistory = new();
     private readonly Dictionary<string, int> _methodCallCounts = new();
     private readonly List<FakeTransaction> _transactions = new();
-    private int _artificialDelayMs = 0;
+    private int _artificialDelayMs;
 
-    /// <summary>
-    /// Gets the history of query specifications
-    /// </summary>
     public IReadOnlyList<QuerySpec> QueryHistory => _queryHistory.AsReadOnly();
-
-    /// <summary>
-    /// Gets the history of command specifications
-    /// </summary>
     public IReadOnlyList<CommandSpec> CommandHistory => _commandHistory.AsReadOnly();
-
-    /// <summary>
-    /// Gets the method call counts
-    /// </summary>
     public IReadOnlyDictionary<string, int> MethodCallCounts => _methodCallCounts.AsReadOnly();
-
-    /// <summary>
-    /// Gets the active transactions
-    /// </summary>
     public IReadOnlyList<FakeTransaction> Transactions => _transactions.AsReadOnly();
 
-    /// <summary>
-    /// Sets artificial delay for operations
-    /// </summary>
     public int ArtificialDelayMs
     {
         get => _artificialDelayMs;
         set => _artificialDelayMs = Math.Max(0, value);
     }
 
-    /// <inheritdoc />
     public async Task<IReadOnlyList<T>> ExecuteQueryAsync<T>(QuerySpec spec, CancellationToken ct = default)
     {
         IncrementCallCount(nameof(ExecuteQueryAsync));
         _queryHistory.Add(spec);
-        
+
         if (_artificialDelayMs > 0)
         {
             await Task.Delay(_artificialDelayMs, ct);
@@ -58,22 +37,20 @@ public class FakeStoragePort : IStoragePort
         return new List<T>();
     }
 
-    /// <inheritdoc />
     public async Task<int> ExecuteCommandAsync(CommandSpec spec, CancellationToken ct = default)
     {
         IncrementCallCount(nameof(ExecuteCommandAsync));
         _commandHistory.Add(spec);
-        
+
         if (_artificialDelayMs > 0)
         {
             await Task.Delay(_artificialDelayMs, ct);
         }
 
         ct.ThrowIfCancellationRequested();
-        return 1; // Simulate one affected row
+        return 1;
     }
 
-    /// <inheritdoc />
     public Task<IStorageTransaction> BeginTransactionAsync(CancellationToken ct = default)
     {
         IncrementCallCount(nameof(BeginTransactionAsync));
@@ -82,9 +59,6 @@ public class FakeStoragePort : IStoragePort
         return Task.FromResult<IStorageTransaction>(transaction);
     }
 
-    /// <summary>
-    /// Clears all history and counters
-    /// </summary>
     public void Clear()
     {
         _queryHistory.Clear();
@@ -106,60 +80,61 @@ public class FakeStoragePort : IStoragePort
     }
 }
 
-/// <summary>
-/// Fake transaction implementation
-/// </summary>
+/// <summary>Фейковая транзакция: помечает коммит/откат и сообщает, что её закрыли.</summary>
 public class FakeTransaction : IStorageTransaction
 {
-    /// <summary>
-    /// Gets whether the transaction was committed
-    /// </summary>
     public bool IsCommitted { get; private set; }
-
-    /// <summary>
-    /// Gets whether the transaction was rolled back
-    /// </summary>
     public bool IsRolledBack { get; private set; }
-
-    /// <summary>
-    /// Gets whether the transaction is disposed
-    /// </summary>
     public bool IsDisposed { get; private set; }
 
-    /// <summary>
-    /// Commits the transaction
-    /// </summary>
     public Task CommitAsync(CancellationToken ct = default)
     {
-        if (IsDisposed)
-            throw new InvalidOperationException("Transaction is already disposed");
-        if (IsRolledBack)
-            throw new InvalidOperationException("Cannot commit after rollback");
-        
+        if (IsDisposed) throw new InvalidOperationException("Transaction is already disposed");
+        if (IsRolledBack) throw new InvalidOperationException("Cannot commit after rollback");
         IsCommitted = true;
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Rolls back the transaction
-    /// </summary>
     public Task RollbackAsync(CancellationToken ct = default)
     {
-        if (IsDisposed)
-            throw new InvalidOperationException("Transaction is already disposed");
-        
+        if (IsDisposed) throw new InvalidOperationException("Transaction is already disposed");
         IsRolledBack = true;
         return Task.CompletedTask;
     }
 
-    public Task CreateSavepointAsync(string name, CancellationToken ct = default) => Task.CompletedTask;
-    public Task RollbackToSavepointAsync(string name, CancellationToken ct = default) => Task.CompletedTask;
-    public Task ReleaseSavepointAsync(string name, CancellationToken ct = default) => Task.CompletedTask;
-
-    /// <inheritdoc />
     public ValueTask DisposeAsync()
     {
         IsDisposed = true;
         return ValueTask.CompletedTask;
     }
+}
+
+/// <summary>Фейковое хранилище-обёртка над реальным IStoragePort для ручного контроля.</summary>
+public sealed class TransactionalFakeStoragePort : IStoragePort
+{
+    private readonly IStoragePort inner;
+    private readonly List<QuerySpec> queries = new();
+    private readonly List<CommandSpec> commands = new();
+
+    public TransactionalFakeStoragePort(IStoragePort inner)
+    {
+        this.inner = inner ?? throw new ArgumentNullException(nameof(inner));
+    }
+
+    public IReadOnlyList<QuerySpec> Queries => queries;
+    public IReadOnlyList<CommandSpec> Commands => commands;
+
+    public Task<IReadOnlyList<T>> ExecuteQueryAsync<T>(QuerySpec spec, CancellationToken ct = default)
+    {
+        queries.Add(spec);
+        return inner.ExecuteQueryAsync<T>(spec, ct);
+    }
+
+    public Task<int> ExecuteCommandAsync(CommandSpec spec, CancellationToken ct = default)
+    {
+        commands.Add(spec);
+        return inner.ExecuteCommandAsync(spec, ct);
+    }
+
+    public Task<IStorageTransaction> BeginTransactionAsync(CancellationToken ct = default) => inner.BeginTransactionAsync(ct);
 }

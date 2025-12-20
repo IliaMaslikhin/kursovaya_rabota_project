@@ -1,77 +1,77 @@
 namespace OilErp.Core.Operations;
 
 /// <summary>
-/// Operation name constants mapped to fully-qualified SQL identifiers (schema.name)
+/// Константы с именами SQL-объектов в формате schema.name.
 /// </summary>
 public static class OperationNames
 {
     /// <summary>
-    /// Plant-level operations available in ANPZ/KRNPZ databases (public schema)
+    /// Операции на заводах ANPZ/KRNPZ (схема public).
     /// </summary>
     public static class Plant
     {
         /// <summary>
-        /// Function: public.sp_insert_measurement_batch(p_asset_code text, p_points jsonb, p_source_plant text)
+        /// Функция: public.sp_insert_measurement_batch(p_asset_code text, p_points jsonb, p_source_plant text)
         /// </summary>
         public const string MeasurementsInsertBatch = "public.sp_insert_measurement_batch";
 
         /// <summary>
-        /// Procedure wrapper: public.sp_insert_measurement_batch_prc(p_asset_code text, p_points jsonb, p_source_plant text)
+        /// Процедура-обёртка: public.sp_insert_measurement_batch_prc(p_asset_code text, p_points jsonb, p_source_plant text)
         /// </summary>
         public const string MeasurementsInsertBatchPrc = "public.sp_insert_measurement_batch_prc";
     }
 
     /// <summary>
-    /// Central database operations (public schema)
+    /// Операции в центральной базе (схема public).
     /// </summary>
     public static class Central
     {
-        // Functions (read/write helpers)
+        // Функции (чтение и расчёты)
 
         /// <summary>
-        /// Helper calculation: public.fn_calc_cr(prev_thk numeric, prev_date timestamptz, last_thk numeric, last_date timestamptz)
+        /// Подсчёт CR: public.fn_calc_cr(prev_thk numeric, prev_date timestamptz, last_thk numeric, last_date timestamptz)
         /// </summary>
         public const string CalcCr = "public.fn_calc_cr";
 
         /// <summary>
-        /// Upsert asset: public.fn_asset_upsert(p_asset_code text, p_name text, p_type text, p_plant_code text)
+        /// Апсерт актива: public.fn_asset_upsert(p_asset_code text, p_name text, p_type text, p_plant_code text)
         /// </summary>
         public const string AssetUpsert = "public.fn_asset_upsert";
 
         /// <summary>
-        /// Upsert policy: public.fn_policy_upsert(p_name text, p_low numeric, p_med numeric, p_high numeric)
+        /// Апсерт политики: public.fn_policy_upsert(p_name text, p_low numeric, p_med numeric, p_high numeric)
         /// </summary>
         public const string PolicyUpsert = "public.fn_policy_upsert";
 
         /// <summary>
-        /// Evaluate risk: public.fn_eval_risk(p_asset_code text, p_policy_name text) RETURNS TABLE(...)
+        /// Расчёт риска: public.fn_eval_risk(p_asset_code text, p_policy_name text) RETURNS TABLE(...)
         /// </summary>
         public const string EvalRisk = "public.fn_eval_risk";
 
         /// <summary>
-        /// Get asset summary JSON: public.fn_asset_summary_json(p_asset_code text, p_policy_name text) RETURNS jsonb
+        /// Краткая сводка по активу в JSON: public.fn_asset_summary_json(p_asset_code text, p_policy_name text) RETURNS jsonb
         /// </summary>
         public const string AnalyticsAssetSummary = "public.fn_asset_summary_json";
 
         /// <summary>
-        /// Top assets by corrosion rate: public.fn_top_assets_by_cr(p_limit int) RETURNS TABLE(...)
+        /// Топ активов по скорости коррозии: public.fn_top_assets_by_cr(p_limit int) RETURNS TABLE(...)
         /// </summary>
         public const string AnalyticsTopAssetsByCr = "public.fn_top_assets_by_cr";
 
         /// <summary>
-        /// Plant CR stats: public.fn_plant_cr_stats(p_plant text, p_from timestamptz, p_to timestamptz)
+        /// Статистика CR по заводу: public.fn_plant_cr_stats(p_plant text, p_from timestamptz, p_to timestamptz)
         /// </summary>
         public const string AnalyticsPlantCrStats = "public.fn_plant_cr_stats";
 
-        // Procedures (CALL ...)
+        // Процедуры (CALL ...)
 
         /// <summary>
-        /// Procedure: public.sp_policy_upsert(p_name text, p_low numeric, p_med numeric, p_high numeric)
+        /// Процедура апсерта политики: public.sp_policy_upsert(p_name text, p_low numeric, p_med numeric, p_high numeric)
         /// </summary>
         public const string SpPolicyUpsert = "public.sp_policy_upsert";
 
         /// <summary>
-        /// Procedure: public.sp_asset_upsert(p_asset_code text, p_name text, p_type text, p_plant_code text)
+        /// Процедура апсерта актива: public.sp_asset_upsert(p_asset_code text, p_name text, p_type text, p_plant_code text)
         /// </summary>
         public const string SpAssetUpsert = "public.sp_asset_upsert";
     }

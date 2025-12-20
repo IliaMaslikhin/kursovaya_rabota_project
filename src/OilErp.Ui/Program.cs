@@ -1,19 +1,29 @@
 ﻿using System;
 using Avalonia;
 using OilErp.Bootstrap;
+using OilErp.Tests.Runner;
 
 namespace OilErp.Ui;
 
 sealed class Program
 {
-    // Initialization code. Don't use any Avalonia, third-party APIs or any
-    // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
-    // yet and stuff might break.
+    // Инициализация. Не трогаем Avalonia/другие API до AppMain — окружение ещё не поднято.
     [STAThread]
     public static void Main(string[] args)
     {
         try
         {
+            // Перед запуском UI прогоняем смоук-тесты.
+            var smoke = SmokeSuite.RunAsync().GetAwaiter().GetResult();
+            if (!smoke.Success)
+            {
+                AppLogger.Error($"[ui] смоук-тесты не прошли: {smoke.Summary}");
+                Console.Error.WriteLine("Смоук-тесты не прошли, UI не запущен.");
+                Console.Error.WriteLine(smoke.Summary);
+                Environment.ExitCode = 1;
+                return;
+            }
+
             BuildAvaloniaApp()
                 .StartWithClassicDesktopLifetime(args);
         }
@@ -26,7 +36,7 @@ sealed class Program
         }
     }
 
-    // Avalonia configuration, don't remove; also used by visual designer.
+    // Настройка Avalonia, нужна и приложению, и дизайнеру.
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()

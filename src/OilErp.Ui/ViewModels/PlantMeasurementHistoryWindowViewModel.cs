@@ -176,7 +176,7 @@ public sealed partial class PlantMeasurementHistoryWindowViewModel : ObservableO
             "Изменить замер",
             plantCode,
             assetCode,
-            initialLabel: item.Label,
+            item.Label,
             initialThickness: (double)item.Thickness,
             initialNote: item.Note,
             isLabelReadOnly: true);

@@ -1,13 +1,15 @@
+using System;
 using System.Text.Json.Serialization;
 
-namespace OilErp.Core.Services.Dtos;
+namespace OilErp.Core.Dto;
 
-// Пример JSON (central.fn_asset_summary_json):
-// {
-//   "asset": {"asset_code":"A1","name":"A1","type":null,"plant_code":"ANPZ"},
-//   "analytics": {"prev_thk":10.1,"prev_date":"2025-01-01T00:00:00Z","last_thk":9.9,"last_date":"2025-01-31T00:00:00Z","cr":0.002,"updated_at":"2025-02-01T00:00:00Z"},
-//   "risk": {"level":"LOW","threshold_low":0.001,"threshold_med":0.005,"threshold_high":0.01,"cr":0.002}
-// }
+public sealed record PlantCrAggregateDto(
+    string Plant,
+    DateTime From,
+    DateTime To,
+    decimal? CrMean,
+    decimal? CrP90,
+    int AssetsConsidered);
 
 public sealed record AssetSummaryDto
 {
@@ -41,4 +43,11 @@ public sealed record AssetSummaryDto
         [JsonPropertyName("threshold_high")] public decimal? ThresholdHigh { get; init; }
         [JsonPropertyName("cr")] public decimal? Cr { get; init; }
     }
+}
+
+public sealed record TopAssetCrDto
+{
+    [JsonPropertyName("asset_code")] public string? AssetCode { get; init; }
+    [JsonPropertyName("cr")] public decimal? Cr { get; init; }
+    [JsonPropertyName("updated_at")] public DateTime? UpdatedAt { get; init; }
 }

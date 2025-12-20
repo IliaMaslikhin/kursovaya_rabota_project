@@ -11,7 +11,7 @@ public sealed partial class PlantMeasurementEditWindowViewModel : ObservableObje
         string title,
         string plantCode,
         string equipmentCode,
-        string? initialLabel = null,
+        string label,
         double? initialThickness = null,
         string? initialNote = null,
         bool isLabelReadOnly = false)
@@ -20,7 +20,7 @@ public sealed partial class PlantMeasurementEditWindowViewModel : ObservableObje
         PlantCode = plantCode;
         EquipmentCode = equipmentCode;
 
-        label = string.IsNullOrWhiteSpace(initialLabel) ? "T1" : initialLabel.Trim();
+        Label = string.IsNullOrWhiteSpace(label) ? "T1" : label.Trim();
         thicknessText = (initialThickness ?? 12.0).ToString("0.###", CultureInfo.InvariantCulture);
         note = string.IsNullOrWhiteSpace(initialNote) ? null : initialNote.Trim();
         IsLabelReadOnly = isLabelReadOnly;
@@ -33,7 +33,7 @@ public sealed partial class PlantMeasurementEditWindowViewModel : ObservableObje
 
     public string EquipmentCode { get; }
 
-    [ObservableProperty] private string label;
+    public string Label { get; }
 
     [ObservableProperty] private string thicknessText;
 
@@ -46,8 +46,7 @@ public sealed partial class PlantMeasurementEditWindowViewModel : ObservableObje
     public event Action<PlantMeasurementEditResult?>? RequestClose;
 
     private bool CanSave() =>
-        !string.IsNullOrWhiteSpace(Label)
-        && TryParseThickness(ThicknessText, out var thk)
+        TryParseThickness(ThicknessText, out var thk)
         && thk > 0;
 
     [RelayCommand(CanExecute = nameof(CanSave))]
@@ -55,7 +54,7 @@ public sealed partial class PlantMeasurementEditWindowViewModel : ObservableObje
     {
         if (string.IsNullOrWhiteSpace(Label))
         {
-            StatusMessage = "Укажите метку точки (label).";
+            StatusMessage = "Не получилось сгенерировать метку точки.";
             SaveCommand.NotifyCanExecuteChanged();
             return;
         }
@@ -86,11 +85,6 @@ public sealed partial class PlantMeasurementEditWindowViewModel : ObservableObje
     private void Cancel()
     {
         RequestClose?.Invoke(null);
-    }
-
-    partial void OnLabelChanged(string value)
-    {
-        SaveCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnThicknessTextChanged(string value)

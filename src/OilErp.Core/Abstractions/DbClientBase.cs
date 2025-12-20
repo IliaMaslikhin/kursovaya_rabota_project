@@ -4,7 +4,7 @@ using OilErp.Core.Dto;
 namespace OilErp.Core.Abstractions;
 
 /// <summary>
-/// Base class for database client implementations
+/// Базовый класс для клиентов базы: тут общая обвязка, конкретика в наследниках.
 /// </summary>
 public abstract class DbClientBase : IStoragePort
 {

@@ -8,7 +8,6 @@ using OilErp.Bootstrap;
 using OilErp.Core.Contracts;
 using OilErp.Core.Dto;
 using OilErp.Core.Services.Central;
-using OilErp.Core.Services.Dtos;
 using OilErp.Ui.Models;
 
 namespace OilErp.Ui.Services;
@@ -72,7 +71,7 @@ public sealed class MeasurementDataProvider
 
     private static List<MeasurementPointDto> BuildPointsFromSummary(
         string assetCode,
-        Core.Services.Dtos.AssetSummaryDto? summary,
+        AssetSummaryDto? summary,
         TopAssetCrDto rowFallback)
     {
         var points = new List<MeasurementPointDto>();

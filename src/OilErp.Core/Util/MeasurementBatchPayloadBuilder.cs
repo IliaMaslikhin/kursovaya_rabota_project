@@ -6,8 +6,8 @@ using OilErp.Core.Dto;
 namespace OilErp.Core.Util;
 
 /// <summary>
-/// Builds canonical JSON payloads for measurement batches accepted by plant procedures.
-/// Keeps label/ts/thickness/note keys aligned across UI/CLI/Tests.
+/// Собирает стандартный JSON для пакета замеров, который принимают заводские процедуры.
+/// Держит одинаковые ключи label/ts/thickness/note для UI/CLI/Tests.
 /// </summary>
 public static class MeasurementBatchPayloadBuilder
 {
@@ -17,10 +17,10 @@ public static class MeasurementBatchPayloadBuilder
     };
 
     /// <summary>
-    /// Build JSON array payload from measurement points.
+    /// Делает JSON-массив из набора точек измерений.
     /// </summary>
-    /// <exception cref="ArgumentNullException">points is null</exception>
-    /// <exception cref="ArgumentException">points is empty or contains invalid values</exception>
+    /// <exception cref="ArgumentNullException">points не передан</exception>
+    /// <exception cref="ArgumentException">points пуст или содержит мусор</exception>
     public static string BuildJson(IEnumerable<MeasurementPointDto> points, bool sortByTimestamp = true)
     {
         if (points is null) throw new ArgumentNullException(nameof(points));
@@ -45,7 +45,7 @@ public static class MeasurementBatchPayloadBuilder
     }
 
     /// <summary>
-    /// Convenience for a single point.
+    /// Упрощённый вызов, если точка одна.
     /// </summary>
     public static string BuildJson(MeasurementPointDto point) => BuildJson(new[] { point });
 

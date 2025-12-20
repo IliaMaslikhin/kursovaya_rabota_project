@@ -72,7 +72,7 @@ public sealed class ThemePalette
         new SolidColorBrush(Color.Parse("#D6E8FF")),
         new SolidColorBrush(Color.Parse("#D92B2B")));
 
-    // Legacy aliases to keep existing usages valid.
+    // Алиасы для совместимости со старыми вызовами.
     public static ThemePalette Dark => UltraBlack;
 
     public static ThemePalette Light => JetBrainsLight;
