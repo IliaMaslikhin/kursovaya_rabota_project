@@ -1,107 +1,234 @@
 # Описание классов и их взаимодействий
 
-## OilErp.Core
-- **Abstractions/DbClientBase** — базовый класс для клиентов БД, реализует `IStoragePort` и требует реализации `ExecuteQueryAsync<T>`, `ExecuteCommandAsync`, `BeginTransactionAsync`.
-- **Abstractions/AppServiceBase** — базовый сервис, хранящий `IStoragePort` и проверяющий, что он не null.
-- **Contracts/IStoragePort** — контракт доступа к БД: `ExecuteQueryAsync<T>(QuerySpec)`, `ExecuteCommandAsync(CommandSpec)`, `BeginTransactionAsync()`.
-- **Contracts/IStorageTransaction** — асинхронная транзакция с `CommitAsync` и `RollbackAsync`.
-- **Contracts/ICoreKernel** — ядро, отдаёт `IStoragePort` через свойство `Storage`.
-- **Dto/CommandSpec, QuerySpec** — описание вызова функции/процедуры с именем операции, параметрами и опциональным тайм-аутом.
-- **Dto/DatabaseProfile** — enum профилей (Central, PlantAnpz, PlantKrnpz, Unknown).
-- **Dto/MeasurementPointDto** — точка замера (метка, время, толщина, комментарий).
-- **Dto/OperationResult<T>** — результат операции с данными, ошибками и метаданными.
-- **Operations/OperationNames** — константы имён SQL-функций/процедур для центральной БД и заводов.
-- **Util/MeasurementBatchPayloadBuilder** — строит JSON payload для `sp_insert_measurement_batch`, нормализует точки/время и сортирует при необходимости.
-- **Services/Dtos/AssetSummaryDto** — десериализуемая модель JSON из `fn_asset_summary_json` (asset/analytics/risk).
-- **Services/Dtos/PlantCrAggregateDto** — агрегированная статистика CR по заводу за период.
-- **Services/Dtos/TopAssetCrDto** — элемент выдачи топ-CR.
+Документ описывает ключевые классы/модули проекта, их связи и важные методы. Имена методов приведены так, как они называются в коде.
 
-### Сервисы центральной БД (обёртки вокруг SQL)
-Все наследуют `AppServiceBase`, собирают `QuerySpec` или `CommandSpec` и вызывают порт:
-- **FnAssetSummaryJsonService** — `fn_asset_summary_jsonAsync(asset_code, policy)` возвращает `AssetSummaryDto?`.
-- **FnTopAssetsByCrService** — `fn_top_assets_by_crAsync(limit)` → список словарей с полями SQL.
-- **FnEvalRiskService** — `fn_eval_riskAsync(asset_code, policy)` → список словарей.
-- **FnCalcCrService** — `fn_calc_crAsync(prev_thk, prev_date, last_thk, last_date)` → список словарей/значений.
-- **FnPlantCrStatsService** — `fn_plant_cr_statsAsync(plant, from, to)` → список словарей со статистикой.
-- **FnAssetUpsertService** — `fn_asset_upsertAsync(asset_code, name, type, plant_code)` → затронутые строки.
-- **FnPolicyUpsertService** — `fn_policy_upsertAsync(name, low, med, high)` → затронутые строки.
-- **SpAssetUpsertService** — `sp_asset_upsertAsync(...)`.
-- **SpPolicyUpsertService** — `sp_policy_upsertAsync(...)`.
+## OilErp.Core (контракты, DTO, сервисы)
 
-### Заводские сервисы
-- **Plants/ANPZ/SpInsertMeasurementBatchService** — `sp_insert_measurement_batchAsync(asset_code, points_json, source_plant)`.
-- **Plants/ANPZ/SpInsertMeasurementBatchPrcService** — процедурный вызов `sp_insert_measurement_batch_prcAsync(...)`.
-- **Plants/KRNPZ/SpInsertMeasurementBatchService** — то же для KRNPZ.
-- **Plants/KRNPZ/SpInsertMeasurementBatchPrcService** — процедурная версия для KRNPZ.
+### Contracts
+- `IStoragePort` — главный контракт доступа к БД. Важные методы: `ExecuteQueryAsync<T>(QuerySpec)`, `ExecuteCommandAsync(CommandSpec)`, `BeginTransactionAsync()`.
+- `IStorageTransaction` — контракт транзакции. Важные методы: `CommitAsync()`, `RollbackAsync()`, `DisposeAsync()`.
+- `ICoreKernel` — минимальный интерфейс ядра с единственным свойством `Storage` (ссылка на `IStoragePort`).
 
-### Агрегации
-- **Aggregations/PlantCrService** — использует `FnPlantCrStatsService`, читает cr_mean/cr_p90/assets_count, возвращает `PlantCrAggregateDto`.
+### Abstractions
+- `DbClientBase` — базовый абстрактный класс для клиентов БД. Определяет виртуальный контракт реализации `IStoragePort`.
+- `AppServiceBase` — общий базовый класс сервисов. Держит `IStoragePort` и методы нормализации ввода: `NormalizeOptional`, `NormalizeCode`, `NormalizePlant`.
 
-## OilErp.Infrastructure
-- **Adapters/StorageAdapter** — реализация `IStoragePort` на Npgsql. `ExecuteQueryAsync` и `ExecuteCommandAsync` получают метаданные функции/процедуры из каталога, формируют вызов с параметрами, различают JSON/SETOF/скаляры, логируют через `AppLogger`. `BeginTransactionAsync` создаёт соединение+транзакцию, хранит их в `AsyncLocal` для повторных вызовов. Внутренний `PgTransactionScope` реализует `IStorageTransaction` с `CommitAsync`, `RollbackAsync`, а также методами сейвпоинтов (Create/RollbackTo/Release) сверх интерфейса.
-- **Adapters/KernelAdapter** — обёртка над `IStoragePort`, реализует `ICoreKernel.Storage`.
-- **Config/StorageConfig** — record с `ConnectionString`, тайм-аутом и флагом `DisableRoutineMetadataCache` (чтение `OILERP__DB__DISABLE_PROC_CACHE`).
-- **Logging/AppLogger** — минимальный логгер (консоль + файл в %APPDATA%/OilErp/logs); можно отключить консоль/файл через `OILERP__LOG__TO_CONSOLE`/`OILERP__LOG__TO_FILE` и задать каталог `OILERP__LOG__DIR` или программно вызвать `AppLogger.Configure`.
+### DTO и спецификации
+- `CommandSpec`, `QuerySpec` — описатели операций (имя операции + параметры + тайм‑аут). Используются всеми сервисами Core.
+- `OperationResult<T>` — обертка результата (успех/ошибка/строки) для сценариев, где нужен унифицированный ответ.
+- `DatabaseProfile` — перечисление профилей: `Central`, `PlantAnpz`, `PlantKrnpz`, `Unknown`.
+- `MeasurementPointDto` — точка замера (Label, Ts, Thickness, Note).
+- Аналитические DTO: `EvalRiskRowDto`, `PlantCrStatDto`, `PlantCrAggregateDto`, `AssetSummaryDto`, `TopAssetCrDto`.
 
-## OilErp.Ui
-### Запуск/Views
-- **Program** — точка входа Avalonia, ловит фатальные ошибки.
-- **App** — создаёт `MainWindow`, отключает встроенную валидацию Avalonia.
-- **ViewLocator** — мапит ViewModel → View через отражение.
-- **Views/MainWindow** — код-бихайнд с вызовом `InitializeComponent`.
+### Operations
+- `OperationNames` — константы SQL‑операций в формате `schema.name`.
+  - `OperationNames.Plant.*` — заводские операции (`sp_insert_measurement_batch`, `sp_insert_measurement_batch_prc`).
+  - `OperationNames.Central.*` — central‑операции (`fn_*` и `sp_*`).
 
-### Сервисы и инфраструктура UI
-- **Services/AppLogger** — копия минимального логгера для UI.
-- **Services/FirstRunTracker** — хранит маркер первого запуска в %APPDATA%/OilErp/first-run.machine.
-- **Services/DatabaseBootstrapper** — создаёт базы central/anpz/krnpz при необходимости, проверяет схему через `DatabaseInventoryInspector`, копирует гайд на рабочий стол при ошибке, возвращает `BootstrapResult`.
-- **Services/DatabaseInventoryInspector** — читает функции/процедуры/таблицы/триггеры из БД, сверяет с ожидаемыми объектами для профиля, при необходимости выполняет SQL-скрипты из `sql/` (по профилю), умеет печатать итог.
-- **Services/KernelGateway** — статический `Create(conn)`: запускает `DatabaseBootstrapper`, проверяет `fn_calc_cr`, создаёт `StorageAdapter`, выставляет флаги `IsLive`, `StatusMessage`, `StorageFactory`.
-- **Services/StoragePortFactory** — возвращает центральный порт или новый `StorageAdapter` по заводскому профилю из переменных окружения (ANPZ/KRNPZ), читает тайм-аут.
-- **Services/MeasurementSnapshotService** — читает `*_measurements.json` из каталога Data, превращает в `MeasurementSeries`.
-- **Services/MeasurementDataProvider** — пытается загрузить данные из БД (`FnTopAssetsByCrService`, `FnAssetSummaryJsonService`), при пустом результате добавляет снапшоты. Возвращает `MeasurementDataResult` с сериями и статусом.
-- **Services/MeasurementIngestionService** — собирает JSON по `MeasurementPointDto`, выбирает порт через `StoragePortFactory`, оборачивает вызов в транзакцию и вызывает `SpInsertMeasurementBatchService` (ANPZ/KRNPZ). Возвращает `MeasurementSubmissionResult`.
-- **Services/DatabaseInventory** — вспомогательные записи: `DbObjectRequirement`, `InventorySnapshot`, `InventoryVerification`.
-- **Services/DatabaseBootstrapper/BootstrapResult** — результат проверки (успех, профиль, первый запуск, код машины, путь к гайду).
+### Сервисы central (обертки над SQL)
+Все сервисы наследуют `AppServiceBase` и используют `QuerySpec`/`CommandSpec`:
+- `FnCalcCrService.fn_calc_crAsync` — вызывает `public.fn_calc_cr`.
+- `FnAssetUpsertService.fn_asset_upsertAsync` — вызывает `public.fn_asset_upsert` (апсерт актива).
+- `FnPolicyUpsertService.fn_policy_upsertAsync` — вызывает `public.fn_policy_upsert` (апсерт политики).
+- `FnEvalRiskService.fn_eval_riskAsync` — вызывает `public.fn_eval_risk`, мапит словари в `EvalRiskRowDto`.
+- `FnAssetSummaryJsonService.fn_asset_summary_jsonAsync` — вызывает `public.fn_asset_summary_json`, десериализует JSON в `AssetSummaryDto`.
+- `FnTopAssetsByCrService.fn_top_assets_by_crAsync` — вызывает `public.fn_top_assets_by_cr`, мапит строки в `TopAssetCrDto`.
+- `FnPlantCrStatsService.fn_plant_cr_statsAsync` — вызывает `public.fn_plant_cr_stats`, мапит строки в `PlantCrStatDto`.
+- `SpPolicyUpsertService.sp_policy_upsertAsync` — вызов процедуры `public.sp_policy_upsert`.
+- `SpAssetUpsertService.sp_asset_upsertAsync` — вызов процедуры `public.sp_asset_upsert`.
 
-### Модели
-- **Models/MeasurementSeries** — список точек по активу/заводу, вычисляет тренд, умеет добавлять точки.
-- **Models/AddMeasurementRequest** — запрос на добавление замера (завод, актив, точка).
-- **Models/MeasurementSubmissionResult** — результат отправки (успех, сообщение, факт записи).
+### Сервисы заводов
+- `Plants.ANPZ.SpInsertMeasurementBatchService.sp_insert_measurement_batchAsync` — обертка над `public.sp_insert_measurement_batch` (ANPZ).
+- `Plants.ANPZ.SpInsertMeasurementBatchPrcService.sp_insert_measurement_batch_prcAsync` — обертка над процедурой `public.sp_insert_measurement_batch_prc` (ANPZ).
+- `Plants.KRNPZ.*` — те же методы для KRNPZ (с нормализацией кода завода).
 
-### ViewModel-слой
-- **ViewModels/ViewModelBase** — базовый `ObservableObject`.
-- **ViewModels/ThemePalette** — преднастроенные кисти для тёмной/светлой темы.
-- **MainWindowViewModel** — хранит состояние подключения, создаёт дочерние панели после `OnConnectAsync(connString)` (KernelGateway, MeasurementDataProvider, MeasurementIngestionService и др.), статус подключения.
-- **ConnectionFormViewModel** — поля подключения и `ConnectAsync` (RelayCommand), строит строку подключения из полей или берёт готовую.
-- **AnalyticsPanelViewModel** — команды `RefreshAsync`; `LoadAsync` тянет `fn_top_assets_by_cr`, вызывает `fn_asset_summary_json` для риска/завода, строит `AnalyticsRowViewModel`.
-- **MeasurementsPanelViewModel** — команда `LoadAsync` (загрузка серий через `MeasurementDataProvider`), хранит `AddMeasurementFormViewModel`, делегирует отправку в `MeasurementIngestionService`, обновляет локальные серии.
-- **AddMeasurementFormViewModel** — хранит список заводов/активов, валидирует ввод замера, команда `SubmitAsync` вызывает колбэк, добавляет новые активы/заводы при появлении.
-- **MeasurementModels** — `AddMeasurementFormViewModel` использует `MeasurementPointDto`.
-- **AnalyticsRowViewModel** — запись таблицы аналитики (asset, plant, CR, риск, обновление).
+### Aggregations
+- `PlantCrService.GetPlantCrAsync` — агрегирует CR по заводу через `FnPlantCrStatsService` и возвращает `PlantCrAggregateDto`.
 
-## OilErp.Tests.Runner
-### Консольный раннер и окружение
-- **Program** — точка входа, выполняет `DatabaseBootstrapper.EnsureProvisionedAsync`, запускает регистрируемые смоук-сценарии через `TestRunner`. Поддерживает CLI-команды (`add-asset`, `add-measurements-anpz`, `summary`, `top-by-cr`, `eval-risk`, `plant-cr`). Внутри содержит `TestEnvironment` (кеширует `StorageConfig`, создаёт `StorageAdapter`/`KernelAdapter`, читает env и appsettings).
+### Util
+- `MeasurementBatchPayloadBuilder` — формирует JSON‑массив точек для заводских процедур.
+  - Важные методы: `BuildJson(IEnumerable<MeasurementPointDto>)`, `BuildJson(MeasurementPointDto)`.
+  - Внутри: нормализация меток и временных меток (`NormalizePoint`, `NormalizeTimestamp`).
 
-### Smoke-тесты
-- **KernelSmoke** — `TestKernelOpensConnection`, `TestKernelExecutesHealthQuery`, `TestKernelTransactionLifecycle`.
-- **StorageSmoke** — `TestCentralBulkDataSeedAndAnalytics`, `TestPlantCrStatsMatchesSeed`; использует `CentralHealthCheckScenario`, `HealthCheckDataSet`, `AssetExpectation`, `AnalyticsVerification`, `AssetSummarySnapshot`.
-- **ExtendedSmokeTests** — `TestCalcCrFunctionMatchesLocalFormula`, `TestEvalRiskLevelsAlignWithPolicy`, `TestAssetSummaryJsonCompleteness`.
-- **AsyncSmokeTests** — `TestFakeStorageConcurrentCommandsCounter`.
-- **ValidationSmokeTests** — `TestDatabaseInventoryMatchesExpectations`, `TestConnectionProfileDetected`, `TestMissingObjectReminderFormatting`.
-- **BootstrapSmokeTests** — `TestMachineCodeMarkerPersisted`.
-- **ProfilesSmoke** — `TestAllProfilesInventory`, `TestPlantInsertAndFdwRoundtrip` (вставка через заводскую процедуру с откатом и проверкой FDW).
-- **PlantE2eSmokeTests** — убеждается, что батчи ANPZ/KRNPZ доходят до `central.measurement_batches` и обновляют `analytics_cr`; при отсутствии строк подключения помечает сценарий skipped.
+## OilErp.Infrastructure (Npgsql, bootstrap, конфиги)
 
-### TestDoubles
-- **FakeStoragePort** — ин-мемори реализация `IStoragePort`: ведёт историю запросов/команд, счётчики вызовов, транзакции (через `FakeTransaction`), искусственные задержки, `Clear`.
-- **FakeTransaction** — флаговый объект транзакции с `CommitAsync`/`RollbackAsync`/`DisposeAsync`.
-- **TransactionalFakeStoragePort** — наследник FakeStoragePort с эмуляцией сейвпоинтов (стек `FakeSavepoint`), методами `CreateSavepoint`, `RollbackToSavepoint`, `ReleaseSavepoint`.
-- **FakeSavepoint** — имя сейвпоинта, флаги отката/релиза.
+### Config
+- `StorageConfig` — record с `ConnectionString`, `CommandTimeoutSeconds`, `DisableRoutineMetadataCache`.
+- `StorageConfigProvider.GetConfig` — читает строки окружения (`OILERP__DB__CONN[_ANPZ|_KRNPZ]`, `OIL_ERP_PG*`) и тайм‑аут.
 
-### Утилиты
-- **Util/TestRunner** — модели `TestResult`, `TestScenarioDefinition`, `TestRunScope`; регистрирует сценарии, выполняет их и печатает результаты.
-- **Util/AppLogger** — минимальный логгер для тестов.
-- **Util/FirstRunTracker** — хранит маркер первого запуска (аналог UI-версии).
-- **Util/DatabaseBootstrapper** — та же логика, что в UI-версии: создаёт базы, проверяет схему, копирует гайд.
-- **Util/DatabaseInventoryInspector** — аналог UI-версии: инвентаризация объектов БД, автоприменение SQL-скриптов по профилю, формат напоминаний.
+### Adapters
+- `StorageAdapter` — реализация `IStoragePort` на Npgsql.
+  - `ExecuteQueryAsync<T>`: читает метаданные функции/процедуры (`pg_proc`), выбирает режим (FUNCTION/PROCEDURE/SETOF/JSON), читает результаты в `Dictionary<string, object?>` и проецирует в `T`.
+  - `ExecuteCommandAsync`: вызывает процедуру через `CALL` или функцию через `SELECT`, возвращает число затронутых строк.
+  - `BeginTransactionAsync`: открывает отдельное соединение и хранит его в `AsyncLocal`.
+  - Важные внутренние методы: `GetRoutineMetadataAsync`, `BuildRoutineCommand`, `BuildArgumentList`, `LooksLikeJsonParam`.
+  - Кэширует метаданные процедур/функций (`RoutineCache`) и умеет инвалидировать кэш при ошибке SQL.
+  - Вложенный `PgTransactionScope` реализует `IStorageTransaction` и гарантирует rollback в `DisposeAsync`.
+- `KernelAdapter` — простая оболочка для `ICoreKernel`, хранит `IStoragePort`.
+
+### Util / Bootstrap
+- `AppLogger` — минимальный логгер (консоль + файл). Важные методы: `Configure`, `Info`, `Error`.
+- `FirstRunTracker` — хранит маркер первого запуска в `%APPDATA%/OilErp/first-run.machine`.
+- `DatabaseBootstrapper` — общий bootstrap для UI/Tests:
+  - `EnsureProvisionedAsync` создает базы `central/anpz/krnpz`, вызывает `DatabaseInventoryInspector`, пишет гайд на рабочий стол при ошибке.
+  - `EnsureDatabasesAsync` создает отсутствующие БД через подключение к `postgres`.
+- `DatabaseInventoryInspector` — инвентаризация и автосинхронизация схемы:
+  - `VerifyAsync` сверяет функции/процедуры/таблицы/триггеры.
+  - `TryAutoApplyProfileScriptsAsync` автоматически применяет профильные SQL из `sql/`.
+  - `EnsurePlantFdwMappingAsync` правит FDW‑сервер `central_srv` и user mapping на заводе.
+- `DatabaseInventory` содержит записи `DbObjectRequirement`, `InventorySnapshot`, `InventoryVerification`.
+
+## OilErp.Ui (Avalonia UI)
+
+### Точка входа и инфраструктура UI
+- `Program.Main` — запускает смоук‑suite (`SmokeSuite.RunAsync`) и только потом стартует Avalonia.
+- `App` — инициализирует Avalonia, включает тему по умолчанию через `ThemeManager`.
+- `ViewLocator` — отражением мапит `ViewModel` → `View` по имени.
+- `Converters`:
+  - `BoolInvertConverter` — инверсия bool для биндингов.
+  - `DatabaseProfileDisplayConverter` — отображение профиля БД (Central/ANPZ/KNPZ).
+
+### Services
+- `KernelGateway` — точка входа в Core/Infra для UI:
+  - `Create` запускает bootstrap, валидирует `fn_calc_cr`, создает `StorageAdapter`.
+  - Возвращает `Storage`, `StorageFactory`, `BootstrapInfo`, `StatusMessage`.
+- `StoragePortFactory` — выдаёт порты для central или заводов на основе окружения.
+- `MeasurementDataProvider` — читает данные central через `FnTopAssetsByCrService` + `FnAssetSummaryJsonService`.
+  Возвращает `MeasurementDataResult` (серии + статусное сообщение).
+- `MeasurementIngestionService` — формирует JSON через `MeasurementBatchPayloadBuilder` и вызывает заводские `sp_insert_measurement_batch`.
+- `MeasurementSnapshotService` — читает локальные файлы `Data/*_measurements.json` в `MeasurementSeries` (в текущем UI не активирован в загрузке, но сервис готов).
+- `UiDialogHost` / `UiFilePicker` — диалоги и file picker.
+- `UiSettingsStore` — хранение UI‑настроек (политики риска по заводам).
+- `UiSettings` — record‑контейнер политик риска и последней выбранной политики.
+- `SimpleXlsxWriter` — ручная генерация XLSX (zip‑архив с XML).
+- `ThemeManager` — применяет `ThemePalette` в ресурсы Avalonia.
+
+### Models
+- `AddMeasurementRequest` — входная модель отправки замера (plant, asset, measurement).
+- `MeasurementSeries` — контейнер для набора `MeasurementPointDto` по активу.
+- `MeasurementSubmissionResult` — результат сохранения замера (успех/сообщение/признак записи).
+
+### ViewModels: оболочка окна и подключение
+- `MainWindowViewModel`
+  - Принимает `KernelGateway` и строит нужные вкладки по профилю.
+  - Важные методы: `ChangeConnectionCommand`, обработчик темы `OnSelectedThemeChanged`.
+- `ConnectWindowViewModel`
+  - Создаёт `ConnectionFormViewModel` и по `ConnectAsync` открывает `MainWindow`.
+- `ConnectionFormViewModel`
+  - Формирует строку подключения (`BuildConnectionString`).
+  - `ConnectAsync` и `TestAsync` тестируют подключение.
+
+### ViewModels: central (оборудование, политики, замеры)
+- `CentralEquipmentTabViewModel`
+  - `RefreshAsync` грузит список `assets_global`.
+  - `AddAsync`/`EditAsync`/`DeleteAsync` — управление справочником central.
+  - `UpsertAsync` вызывает `FnAssetUpsertService`.
+- `CentralPoliciesTabViewModel`
+  - `RefreshAsync` читает `risk_policies`.
+  - `AddAsync`/`EditAsync`/`DeleteAsync` — управление политиками.
+  - `UpsertAsync` вызывает `FnPolicyUpsertService`.
+- `CentralMeasurementsTabViewModel`
+  - `RefreshAsync` строит матрицу последних замеров по `measurement_batches`.
+  - `AddMeasurementAsync` добавляет замер в central (вставка в `measurement_batches`).
+  - `OpenTransferAsync` открывает окно импорта/экспорта.
+  - Внутренние методы: `GenerateNextLabelAsync`, `InsertBatchAsync`, `LoadLastAnalyticsAsync`, `HasExtendedColumnsAsync`.
+
+#### Вспомогательные модели central
+- `EquipmentItemViewModel` — строка списка оборудования (код/название/тип/источник).
+- `PolicyItemViewModel` — строка списка политик (name/low/med/high).
+- `CentralMeasurementColumnViewModel` — колонка даты в таблице замеров.
+- `CentralMeasurementEquipmentRowViewModel` — строка оборудования + словарь значений по датам, метод `RebuildCells`.
+- `CentralMeasurementsGroupHeaderViewModel` — заголовок группировки (завод/тип/дата).
+
+### ViewModels: заводы
+- `PlantEquipmentTabViewModel`
+  - `RefreshAsync` читает `assets_local`.
+  - `AddAsync`/`EditAsync`/`DeleteAsync` — управление локальными активами.
+- `PlantMeasurementsTabViewModel`
+  - `RefreshAsync` строит матрицу локальных замеров.
+  - `AddMeasurementAsync` вызывает заводские `sp_insert_measurement_batch`.
+  - `EditLastMeasurementAsync` и `DeleteLastMeasurementAsync` правят последний замер и отправляют агрегированный батч в central.
+  - `OpenTransferAsync` открывает окно импорта/экспорта для завода.
+  - Внутренние методы: `EnqueueBatchToCentralAsync`, `GenerateNextLabelAsync`, `ShouldBumpTimestamp`.
+
+#### Вспомогательные модели заводов
+- `PlantEquipmentItemViewModel` — строка списка локального оборудования (код/локация/статус/created_at).
+- `PlantMeasurementColumnViewModel` — колонка даты в локальной таблице.
+- `PlantMeasurementEquipmentRowViewModel` — строка оборудования с локальными замерами и пересчетом `Cells`.
+- `PlantMeasurementsGroupHeaderViewModel` — заголовок группировки по статусу/локации/дате.
+- `EquipmentSortOption` / `EquipmentGroupOption` — модели опций сортировки/группировки (используются и в central, и на заводах).
+
+### ViewModels: история и перенос данных
+- `CentralMeasurementsTransferWindowViewModel`
+  - Экспорт/импорт CSV/JSON/XLSX по `measurement_batches`.
+  - Вставка идет напрямую в `measurement_batches` с пересчетом prev/last.
+- `PlantMeasurementsTransferWindowViewModel`
+  - Экспорт/импорт CSV/JSON/XLSX по локальным `measurements`.
+  - Импорт вызывает `sp_insert_measurement_batch`.
+- `CentralMeasurementHistoryWindowViewModel`
+  - История `measurement_batches` по активу: фильтры по времени, группировка, импорт/экспорт.
+- `PlantMeasurementHistoryWindowViewModel`
+  - История `measurements` по активу: редактирование/удаление и отправка батча в central.
+
+#### Вспомогательные модели истории
+- `CentralMeasurementHistoryItemViewModel` — строка истории central (plant/ts/thickness/label/note).
+- `CentralMeasurementHistoryGroupHeaderViewModel` — заголовок группировки по дню.
+- `PlantMeasurementHistoryItemViewModel` — строка истории завода.
+- `PlantMeasurementHistoryGroupHeaderViewModel` — заголовок по дню.
+- `MeasurementSortOption` — опции сортировки (используются в обоих окнах истории).
+
+### ViewModels: аналитика
+- `AnalyticsPanelViewModel`
+  - Загружает политики риска и строит группы по заводам.
+  - `RefreshAsync`, `ApplyPolicyToAllAsync`, `RefreshGroupAsync`.
+- `AnalyticsPlantGroupViewModel`
+  - Представляет одну группу аналитики (завод/политика/таблица).
+- `AnalyticsRowViewModel` — строка таблицы аналитики (asset/plant/cr/risk/updated_at).
+
+### Дополнительные ViewModels
+- `MeasurementsPanelViewModel` — загрузка серий через `MeasurementDataProvider`, отправка замеров через `MeasurementIngestionService`.
+- `AddMeasurementFormViewModel` — форма ввода (команда `SubmitAsync`) и управление списком активов/заводов.
+- `EquipmentEditWindowViewModel`, `RiskPolicyEditWindowViewModel`, `CentralMeasurementEditWindowViewModel`, `PlantMeasurementEditWindowViewModel` — диалоговые формы с валидацией ввода.
+- `ConfirmDialogViewModel` — универсальное подтверждение действия.
+- `ThemePalette`, `ThemeOption` — модели тем оформления UI.
+
+## OilErp.Tests.Runner (смоук‑проверки)
+
+### Основные классы
+- `SmokeSuite.RunAsync` — запускает `DatabaseBootstrapper`, регистрирует сценарии в `TestRunner` и возвращает сводный результат.
+- `TestEnvironment` — создание `StorageAdapter`/`KernelAdapter` и чтение конфигов (env + appsettings).
+- `TestRunner` — реестр сценариев, группировка по категориям, вычисление итогов.
+
+### Smoke‑тесты
+- `KernelSmoke` — проверка подключения, базового запроса и транзакций ядра.
+- `StorageSmoke` — массовый посев и проверка аналитики, сверка mean/p90.
+- `ExtendedSmokeTests` — проверка `fn_calc_cr`, `fn_eval_risk`, полноты `fn_asset_summary_json`.
+- `CommonSmokeTests` — проверка фейкового порта, валидация ошибок и маркера первого запуска.
+- `ValidationSmokeTests` — инвентаризация схемы и проверка шаблона напоминаний.
+- `ProfilesSmoke` — проверка профилей и доступности FDW.
+- `PlantE2eSmokeTests` — E2E: завод → central → analytics_cr.
+
+### Внутренние модели smoke‑сценариев
+- `HealthCheckDataSet` — набор тестовых активов и порогов риска для посева.
+- `AssetMeasurementSeed` — входные измерения для актива (prev/last).
+- `AssetExpectation` — ожидаемые CR и риск по активу.
+- `AssetAnalyticsRow` — строка сравнения ожиданий и факта (CR/risk/updated_at).
+- `HealthCheckSeedSnapshot` — снимок ожиданий и списка тестовых активов.
+- `AnalyticsVerification` / `SimpleVerification` — результат проверки аналитики.
+- `CentralHealthCheckScenario` — сценарий посева/проверки, использует `StorageAdapter` и прямые SQL.
+- `HealthCheckSeedContext` — контекст посева с авто‑очисткой (rollback + cleanup).
+- `AssetSummarySnapshot` — парсер JSON‑сводки (уровень риска, updated_at).
+
+### TestDoubles и утилиты
+- `FakeStoragePort`/`FakeTransaction` — фейковые реализации `IStoragePort`/`IStorageTransaction`.
+- `TransactionalFakeStoragePort` — обертка над реальным портом с логированием вызовов.
+- `MeasurementBatchHelper` — читает CSV/JSON и строит JSON для заводских процедур.
+
+## Типовые цепочки взаимодействий классов
+- Подключение UI: `ConnectWindowViewModel` → `KernelGateway.Create` → `DatabaseBootstrapper` → `DatabaseInventoryInspector` → `StorageAdapter`.
+- Добавление замера на заводе: `PlantMeasurementsTabViewModel` → `MeasurementBatchPayloadBuilder` → `SpInsertMeasurementBatchService` → `StorageAdapter` → `sp_insert_measurement_batch` → `sp_insert_measurement_batch_prc` → `central_ft.measurement_batches`.
+- Добавление замера в central: `CentralMeasurementsTabViewModel` → `InsertBatchAsync` → `measurement_batches` → `trg_measurement_batches_bi` → `analytics_cr`.
+- Импорт CSV/JSON в central: `CentralMeasurementsTransferWindowViewModel` → `ParseCsv/ParseJson` → `InsertPointsAsync` → `InsertBatchAsync`.
+- Редактирование истории на заводе: `PlantMeasurementHistoryWindowViewModel` → `UpdateMeasurementAsync/DeleteMeasurementAsync` → `EnqueueBatchToCentralAsync`.
+- Аналитика: `AnalyticsPanelViewModel` → `RefreshGroupAsync` → Npgsql‑запрос → `AnalyticsRowViewModel`.
+- Запуск smoke‑suite: `Program` → `SmokeSuite.RunAsync` → `TestRunner` → классы `KernelSmoke`/`StorageSmoke`/`PlantE2eSmokeTests`.

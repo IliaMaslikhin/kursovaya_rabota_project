@@ -56,7 +56,7 @@
                              IsVisible="{Binding HasField2Options, Converter={StaticResource BoolInvert}}"/>
                 </StackPanel>
 
-                <TextBlock Text="Локация и статус — справочные поля для фильтрации/поиска. Для завода статус по умолчанию OK."
+                <TextBlock Text="Локация и статус — справочные поля для фильтрации/поиска. Для завода статус по умолчанию «Норма»."
                            IsVisible="{Binding ShowPlantMetaHint}"
                            Foreground="{DynamicResource Brush.TextSecondary}"
                            TextWrapping="Wrap"/>

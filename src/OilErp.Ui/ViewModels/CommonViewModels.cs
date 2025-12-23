@@ -12,6 +12,21 @@ public sealed record ThemeOption(string Code, string Title, ThemePalette Palette
     public override string ToString() => Title;
 }
 
+public sealed record ColumnSortOption(string Code, string Title, bool Descending)
+{
+    public override string ToString() => Title;
+}
+
+public sealed record EquipmentGroupHeaderViewModel(string Title, int Count)
+{
+    public string DisplayTitle => $"{Title} ({Count})";
+}
+
+public sealed record MeasurementDateGroupHeaderViewModel(string Title, int ColumnSpan)
+{
+    public double Width => ColumnSpan * 120;
+}
+
 public sealed partial class ConfirmDialogViewModel : ObservableObject
 {
     public ConfirmDialogViewModel(string title, string message, string confirmText = "Да", string cancelText = "Отмена")

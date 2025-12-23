@@ -36,6 +36,15 @@ CREATE FOREIGN TABLE central_ft.measurement_batches (
 SERVER central_srv
 OPTIONS (schema_name 'public', table_name 'measurement_batches');
 
+DROP FOREIGN TABLE IF EXISTS central_ft.asset_cleanup_requests;
+CREATE FOREIGN TABLE central_ft.asset_cleanup_requests (
+  -- Важно: не включаем identity/default колонки (id/requested_at).
+  source_plant TEXT,
+  asset_code   TEXT
+)
+SERVER central_srv
+OPTIONS (schema_name 'public', table_name 'asset_cleanup_requests');
+
 -- If central needs explicit creds, use:
 -- CREATE USER MAPPING IF NOT EXISTS FOR CURRENT_USER SERVER central_srv
 --   OPTIONS (user 'erp_owner', password 'CHANGE_ME');

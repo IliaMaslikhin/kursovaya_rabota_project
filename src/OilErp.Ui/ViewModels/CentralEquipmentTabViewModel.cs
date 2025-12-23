@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -18,6 +20,20 @@ namespace OilErp.Ui.ViewModels;
 public sealed partial class CentralEquipmentTabViewModel : ObservableObject
 {
     private const string CentralPlantCode = "CENTRAL";
+    private static readonly EquipmentSortOption[] EquipmentSortOptionsSource =
+    {
+        new EquipmentSortOption("code", "Код (A→Z)", "asset_code"),
+        new EquipmentSortOption("name", "Название (A→Z)", "name"),
+        new EquipmentSortOption("type", "Тип (A→Z)", "type"),
+        new EquipmentSortOption("plant", "Завод (A→Z)", "plant_code")
+    };
+    private static readonly EquipmentGroupOption[] EquipmentGroupOptionsSource =
+    {
+        new EquipmentGroupOption("none", "Без группировки"),
+        new EquipmentGroupOption("plant", "Группировать: завод"),
+        new EquipmentGroupOption("type", "Группировать: тип"),
+        new EquipmentGroupOption("code_prefix", "Группировать: код (префикс)")
+    };
 
     private readonly IStoragePort storage;
     private readonly string connectionString;
@@ -30,7 +46,12 @@ public sealed partial class CentralEquipmentTabViewModel : ObservableObject
         this.connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
 
         Items = new ObservableCollection<EquipmentItemViewModel>();
+        DisplayItems = new ObservableCollection<object>();
         statusMessage = "Загрузите список оборудования.";
+        EquipmentSortOptions = EquipmentSortOptionsSource;
+        selectedEquipmentSort = EquipmentSortOptions[0];
+        EquipmentGroupOptions = EquipmentGroupOptionsSource;
+        selectedEquipmentGroup = EquipmentGroupOptions[0];
 
         filterDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
         filterDebounceTimer.Tick += async (_, _) =>
@@ -44,12 +65,29 @@ public sealed partial class CentralEquipmentTabViewModel : ObservableObject
 
     public ObservableCollection<EquipmentItemViewModel> Items { get; }
 
+    public ObservableCollection<object> DisplayItems { get; }
+
+    public IReadOnlyList<EquipmentSortOption> EquipmentSortOptions { get; }
+
+    public IReadOnlyList<EquipmentGroupOption> EquipmentGroupOptions { get; }
+
+    [ObservableProperty] private object? selectedDisplayItem;
+
     [ObservableProperty] private EquipmentItemViewModel? selectedItem;
 
     [ObservableProperty] private string filterText = string.Empty;
 
+    [ObservableProperty] private EquipmentSortOption selectedEquipmentSort;
+
+    [ObservableProperty] private EquipmentGroupOption selectedEquipmentGroup;
+
     [ObservableProperty] private bool isBusy;
     [ObservableProperty] private string statusMessage;
+
+    partial void OnSelectedDisplayItemChanged(object? value)
+    {
+        SelectedItem = value as EquipmentItemViewModel;
+    }
 
     partial void OnIsBusyChanged(bool value)
     {
@@ -72,7 +110,7 @@ public sealed partial class CentralEquipmentTabViewModel : ObservableObject
         }
         else if (!IsEditableInCentral(value))
         {
-            var plant = string.IsNullOrWhiteSpace(value.PlantCode) ? "—" : value.PlantCode;
+            var plant = FormatPlantDisplay(value.PlantCode);
             StatusMessage = $"Оборудование получено из {plant}. Редактирование доступно только на заводе.";
         }
         else
@@ -89,6 +127,16 @@ public sealed partial class CentralEquipmentTabViewModel : ObservableObject
         filterRefreshPending = true;
         filterDebounceTimer.Stop();
         filterDebounceTimer.Start();
+    }
+
+    partial void OnSelectedEquipmentSortChanged(EquipmentSortOption value)
+    {
+        RebuildDisplayItems();
+    }
+
+    partial void OnSelectedEquipmentGroupChanged(EquipmentGroupOption value)
+    {
+        RebuildDisplayItems();
     }
 
     private bool CanOpenDialog() => !IsBusy;
@@ -112,7 +160,10 @@ public sealed partial class CentralEquipmentTabViewModel : ObservableObject
         {
             IsBusy = true;
             StatusMessage = "Загрузка оборудования...";
+            SelectedDisplayItem = null;
+            SelectedItem = null;
             Items.Clear();
+            DisplayItems.Clear();
 
             await using var conn = new NpgsqlConnection(connectionString);
             await conn.OpenAsync();
@@ -139,6 +190,7 @@ public sealed partial class CentralEquipmentTabViewModel : ObservableObject
                 Items.Add(new EquipmentItemViewModel(code, name, type, plant));
             }
 
+            RebuildDisplayItems();
             StatusMessage = $"Загружено: {Items.Count}";
         }
         catch (Exception ex)
@@ -165,14 +217,14 @@ public sealed partial class CentralEquipmentTabViewModel : ObservableObject
         try
         {
             var vm = new EquipmentEditWindowViewModel(
-                "Добавить оборудование (central)",
+                "Добавить оборудование (центральная база)",
                 "Код оборудования",
                 string.Empty,
                 isCodeReadOnly: false,
                 "Название",
                 null,
                 "Тип",
-                "PIPELINE");
+                "ТРУБА");
 
             var dialog = new EquipmentEditWindow { DataContext = vm };
             var result = await UiDialogHost.ShowDialogAsync<EquipmentEditResult?>(dialog);
@@ -193,7 +245,7 @@ public sealed partial class CentralEquipmentTabViewModel : ObservableObject
         if (selected is null) return;
         if (!IsEditableInCentral(selected))
         {
-            StatusMessage = "Эта запись пришла с завода. Редактирование недоступно в Central.";
+            StatusMessage = "Эта запись пришла с завода. Редактирование недоступно в центральной базе.";
             return;
         }
 
@@ -228,7 +280,7 @@ public sealed partial class CentralEquipmentTabViewModel : ObservableObject
         if (selected is null) return;
         if (!IsEditableInCentral(selected))
         {
-            StatusMessage = "Эта запись пришла с завода. Удаление недоступно в Central.";
+            StatusMessage = "Эта запись пришла с завода. Удаление недоступно в центральной базе.";
             return;
         }
 
@@ -266,7 +318,7 @@ public sealed partial class CentralEquipmentTabViewModel : ObservableObject
             }
 
             await tx.CommitAsync();
-            StatusMessage = deleted > 0 ? "Удалено." : "Не найдено (возможно, не central).";
+            StatusMessage = deleted > 0 ? "Удалено." : "Не найдено (возможно, не центральная база).";
             SelectedItem = null;
             await RefreshAsync();
         }
@@ -329,6 +381,116 @@ public sealed partial class CentralEquipmentTabViewModel : ObservableObject
         return string.IsNullOrWhiteSpace(item.PlantCode)
                || string.Equals(item.PlantCode, CentralPlantCode, StringComparison.OrdinalIgnoreCase);
     }
+
+    private void RebuildDisplayItems()
+    {
+        DisplayItems.Clear();
+        if (Items.Count == 0) return;
+
+        var ordered = GetSortedItems();
+        if (string.Equals(SelectedEquipmentGroup.Code, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var item in ordered)
+            {
+                DisplayItems.Add(item);
+            }
+
+            return;
+        }
+
+        if (string.Equals(SelectedEquipmentGroup.Code, "plant", StringComparison.OrdinalIgnoreCase))
+        {
+            var groups = ordered
+                .GroupBy(i => string.IsNullOrWhiteSpace(i.PlantCode) ? "—" : i.PlantCode.Trim(), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var g in groups)
+            {
+                var plantTitle = g.Key == "—" ? g.Key : FormatPlantDisplay(g.Key);
+                DisplayItems.Add(new EquipmentGroupHeaderViewModel($"Завод: {plantTitle}", g.Count()));
+                foreach (var item in g)
+                {
+                    DisplayItems.Add(item);
+                }
+            }
+
+            return;
+        }
+
+        if (string.Equals(SelectedEquipmentGroup.Code, "type", StringComparison.OrdinalIgnoreCase))
+        {
+            var groups = ordered
+                .GroupBy(i => string.IsNullOrWhiteSpace(i.Type) ? "—" : i.Type.Trim(), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var g in groups)
+            {
+                DisplayItems.Add(new EquipmentGroupHeaderViewModel($"Тип: {g.Key}", g.Count()));
+                foreach (var item in g)
+                {
+                    DisplayItems.Add(item);
+                }
+            }
+
+            return;
+        }
+
+        if (string.Equals(SelectedEquipmentGroup.Code, "code_prefix", StringComparison.OrdinalIgnoreCase))
+        {
+            var groups = ordered
+                .GroupBy(i => GetCodePrefix(i.Code), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var g in groups)
+            {
+                DisplayItems.Add(new EquipmentGroupHeaderViewModel($"Префикс: {g.Key}", g.Count()));
+                foreach (var item in g)
+                {
+                    DisplayItems.Add(item);
+                }
+            }
+        }
+    }
+
+    private IReadOnlyList<EquipmentItemViewModel> GetSortedItems()
+    {
+        var comparer = StringComparer.OrdinalIgnoreCase;
+        return SelectedEquipmentSort.Code switch
+        {
+            "name" => Items.OrderBy(i => i.Name ?? string.Empty, comparer).ThenBy(i => i.Code, comparer).ToList(),
+            "type" => Items.OrderBy(i => i.Type ?? string.Empty, comparer).ThenBy(i => i.Code, comparer).ToList(),
+            "plant" => Items
+                .OrderBy(i => string.IsNullOrWhiteSpace(i.PlantCode))
+                .ThenBy(i => i.PlantCode ?? string.Empty, comparer)
+                .ThenBy(i => i.Code, comparer)
+                .ToList(),
+            _ => Items.OrderBy(i => i.Code, comparer).ToList()
+        };
+    }
+
+    private static string GetCodePrefix(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return "—";
+        var trimmed = code.Trim();
+        var idx = trimmed.IndexOf('-');
+        return idx > 0 ? trimmed[..idx] : trimmed;
+    }
+
+    internal static string FormatPlantDisplay(string? plantCode)
+    {
+        if (string.IsNullOrWhiteSpace(plantCode)) return "—";
+        var upper = plantCode.Trim().ToUpperInvariant();
+        return upper switch
+        {
+            "KRNPZ" or "KNPZ" => "КНПЗ",
+            "ANPZ" => "АНПЗ",
+            "CENTRAL" => "Центральная",
+            _ => upper
+        };
+    }
 }
 
-public sealed record EquipmentItemViewModel(string Code, string? Name, string? Type, string? PlantCode);
+public sealed record EquipmentItemViewModel(string Code, string? Name, string? Type, string? PlantCode)
+{
+    public string PlantCodeDisplay => CentralEquipmentTabViewModel.FormatPlantDisplay(PlantCode);
+}

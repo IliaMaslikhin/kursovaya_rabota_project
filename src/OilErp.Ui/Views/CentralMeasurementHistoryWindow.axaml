@@ -12,7 +12,7 @@
           Margin="18"
           RowSpacing="12">
         <StackPanel Spacing="4">
-            <TextBlock Text="CENTRAL"
+            <TextBlock Text="ЦЕНТРАЛЬНАЯ"
                        Foreground="{DynamicResource Brush.TextSecondary}"/>
             <TextBlock Text="{Binding AssetCode}"
                        FontSize="18"
@@ -58,7 +58,7 @@
                     </Style>
                 </WrapPanel.Styles>
                 <TextBox Width="240"
-                         Watermark="Поиск (завод/label/note)"
+                         Watermark="Поиск (завод/метка/комментарий)"
                          Text="{Binding FilterText}"/>
                 <TextBox Width="220"
                          Watermark="С даты (например: 2025-12-17)"
@@ -94,7 +94,7 @@
                                        Text="Завод"
                                        Foreground="{DynamicResource Brush.TextSecondary}"/>
                             <TextBlock Grid.Column="2"
-                                       Text="Label"
+                                       Text="Метка"
                                        Foreground="{DynamicResource Brush.TextSecondary}"/>
                             <TextBlock Grid.Column="3"
                                        Text="Толщина"
@@ -172,4 +172,3 @@
         </StackPanel>
     </Grid>
 </Window>
-

@@ -143,7 +143,7 @@ public sealed partial class ConnectionFormViewModel : ObservableObject
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = "select current_database()";
             var db = (await cmd.ExecuteScalarAsync())?.ToString() ?? "?";
-            StatusMessage = $"OK: подключение установлено (db={db}).";
+            StatusMessage = $"Успешно: подключение установлено (db={db}).";
         }
         catch (Exception ex)
         {

@@ -22,11 +22,12 @@ public sealed partial class PlantMeasurementsTransferWindowViewModel : Observabl
     {
         this.plantCode = plantCode;
         this.connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
-        title = $"Импорт / Экспорт замеров — {plantCode}";
+        title = $"Импорт / Экспорт замеров — {PlantCodeDisplay}";
         statusMessage = "Экспорт/импорт выполняется только для текущей БД завода.";
     }
 
     public string PlantCode => plantCode;
+    public string PlantCodeDisplay => FormatPlantDisplay(plantCode);
 
     [ObservableProperty] private bool isBusy;
     [ObservableProperty] private string title;
@@ -47,8 +48,8 @@ public sealed partial class PlantMeasurementsTransferWindowViewModel : Observabl
             var rows = await LoadAllAsync();
             var csv = BuildCsv(rows);
             var ok = await UiFilePicker.SaveTextAsync(
-                $"Экспорт CSV ({plantCode})",
-                $"{plantCode.ToLowerInvariant()}_measurements_{DateTime.Now:yyyyMMdd_HHmm}.csv",
+                $"Экспорт CSV ({PlantCodeDisplay})",
+                $"{plantCode.ToLowerInvariant()}_замеры_{DateTime.Now:yyyyMMdd_HHmm}.csv",
                 csv,
                 UiFilePicker.CsvFileType);
 
@@ -75,8 +76,8 @@ public sealed partial class PlantMeasurementsTransferWindowViewModel : Observabl
             var rows = await LoadAllAsync();
             var json = BuildJson(rows);
             var ok = await UiFilePicker.SaveTextAsync(
-                $"Экспорт JSON ({plantCode})",
-                $"{plantCode.ToLowerInvariant()}_measurements_{DateTime.Now:yyyyMMdd_HHmm}.json",
+                $"Экспорт JSON ({PlantCodeDisplay})",
+                $"{plantCode.ToLowerInvariant()}_замеры_{DateTime.Now:yyyyMMdd_HHmm}.json",
                 json,
                 UiFilePicker.JsonFileType);
 
@@ -102,10 +103,10 @@ public sealed partial class PlantMeasurementsTransferWindowViewModel : Observabl
 
             var rows = await LoadAllAsync();
             var (headers, tableRows) = BuildTable(rows);
-            var bytes = SimpleXlsxWriter.Build("Measurements", headers, tableRows);
+            var bytes = SimpleXlsxWriter.Build("Замеры", headers, tableRows);
             var ok = await UiFilePicker.SaveBytesAsync(
-                $"Экспорт Excel (.xlsx) ({plantCode})",
-                $"{plantCode.ToLowerInvariant()}_measurements_{DateTime.Now:yyyyMMdd_HHmm}.xlsx",
+                $"Экспорт Excel (.xlsx) ({PlantCodeDisplay})",
+                $"{plantCode.ToLowerInvariant()}_замеры_{DateTime.Now:yyyyMMdd_HHmm}.xlsx",
                 bytes,
                 UiFilePicker.XlsxFileType);
 
@@ -129,7 +130,7 @@ public sealed partial class PlantMeasurementsTransferWindowViewModel : Observabl
             IsBusy = true;
             StatusMessage = "Открываем CSV...";
 
-            var (_, content) = await UiFilePicker.OpenTextAsync($"Импорт CSV ({plantCode})", UiFilePicker.CsvFileType);
+            var (_, content) = await UiFilePicker.OpenTextAsync($"Импорт CSV ({PlantCodeDisplay})", UiFilePicker.CsvFileType);
             if (string.IsNullOrWhiteSpace(content))
             {
                 StatusMessage = "Импорт отменён.";
@@ -160,7 +161,7 @@ public sealed partial class PlantMeasurementsTransferWindowViewModel : Observabl
             IsBusy = true;
             StatusMessage = "Открываем JSON...";
 
-            var (_, content) = await UiFilePicker.OpenTextAsync($"Импорт JSON ({plantCode})", UiFilePicker.JsonFileType);
+            var (_, content) = await UiFilePicker.OpenTextAsync($"Импорт JSON ({PlantCodeDisplay})", UiFilePicker.JsonFileType);
             if (string.IsNullOrWhiteSpace(content))
             {
                 StatusMessage = "Импорт отменён.";
@@ -510,5 +511,17 @@ public sealed partial class PlantMeasurementsTransferWindowViewModel : Observabl
         var upper = (value ?? string.Empty).Trim().ToUpperInvariant();
         if (upper == "KRNPZ") return "KNPZ";
         return upper;
+    }
+
+    private static string FormatPlantDisplay(string? plantCode)
+    {
+        if (string.IsNullOrWhiteSpace(plantCode)) return "—";
+        var upper = plantCode.Trim().ToUpperInvariant();
+        return upper switch
+        {
+            "KRNPZ" or "KNPZ" => "КНПЗ",
+            "ANPZ" => "АНПЗ",
+            _ => upper
+        };
     }
 }

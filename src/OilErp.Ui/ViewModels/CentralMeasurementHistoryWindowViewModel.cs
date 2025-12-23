@@ -175,7 +175,7 @@ public sealed partial class CentralMeasurementHistoryWindowViewModel : Observabl
             var csv = BuildCsv(Items);
             var ok = await UiFilePicker.SaveTextAsync(
                 "Экспорт CSV",
-                $"{assetCode}_central_measurements.csv",
+                $"{assetCode}_центральная_замеры.csv",
                 csv,
                 UiFilePicker.CsvFileType);
 
@@ -202,7 +202,7 @@ public sealed partial class CentralMeasurementHistoryWindowViewModel : Observabl
             var json = BuildJson(Items);
             var ok = await UiFilePicker.SaveTextAsync(
                 "Экспорт JSON",
-                $"{assetCode}_central_measurements.json",
+                $"{assetCode}_центральная_замеры.json",
                 json,
                 UiFilePicker.JsonFileType);
 
@@ -227,10 +227,10 @@ public sealed partial class CentralMeasurementHistoryWindowViewModel : Observabl
             StatusMessage = "Готовим XLSX...";
 
             var (headers, rows) = BuildTable(Items);
-            var bytes = SimpleXlsxWriter.Build("Measurements", headers, rows);
+            var bytes = SimpleXlsxWriter.Build("Замеры", headers, rows);
             var ok = await UiFilePicker.SaveBytesAsync(
                 "Экспорт Excel (.xlsx)",
-                $"{assetCode}_central_measurements.xlsx",
+                $"{assetCode}_центральная_замеры.xlsx",
                 bytes,
                 UiFilePicker.XlsxFileType);
 
@@ -733,14 +733,20 @@ public sealed partial class CentralMeasurementHistoryWindowViewModel : Observabl
             new MeasurementSortOption("plant", "Завод", "mb.source_plant asc nulls last, mb.last_date desc, mb.id desc"),
             new MeasurementSortOption("thk_desc", "Толщина (убывание)", "mb.last_thk desc, mb.last_date desc, mb.id desc"),
             new MeasurementSortOption("thk_asc", "Толщина (возрастание)", "mb.last_thk asc, mb.last_date desc, mb.id desc"),
-            new MeasurementSortOption("label", "Label", "mb.last_label asc nulls last, mb.last_date desc, mb.id desc")
+            new MeasurementSortOption("label", "Метка", "mb.last_label asc nulls last, mb.last_date desc, mb.id desc")
         };
 
     private static string FormatPlant(string plant)
     {
         if (string.IsNullOrWhiteSpace(plant)) return "—";
         var upper = plant.Trim().ToUpperInvariant();
-        return upper == "KRNPZ" ? "KNPZ" : upper;
+        return upper switch
+        {
+            "KRNPZ" or "KNPZ" => "КНПЗ",
+            "ANPZ" => "АНПЗ",
+            "CENTRAL" => "Центральная",
+            _ => upper
+        };
     }
 }
 

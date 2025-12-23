@@ -35,13 +35,13 @@
                 <Grid ColumnDefinitions="*,*,*"
                       ColumnSpacing="10">
                     <TextBox Text="{Binding Low}"
-                             Watermark="Low"/>
+                             Watermark="Низкий"/>
                     <TextBox Grid.Column="1"
                              Text="{Binding Med}"
-                             Watermark="Med"/>
+                             Watermark="Средний"/>
                     <TextBox Grid.Column="2"
                              Text="{Binding High}"
-                             Watermark="High"/>
+                             Watermark="Высокий"/>
                 </Grid>
 
                 <StackPanel Orientation="Horizontal"
@@ -60,4 +60,3 @@
         </Border>
     </Grid>
 </Window>
-

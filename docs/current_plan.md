@@ -1,168 +1,52 @@
-# План исправлений по итогам ручного тестирования
+# План подготовки проекта к сдаче (лимит 2 МБ)
 
-- [x] Ручное тестирование выполнено (найдены ошибки/недочёты ниже).
+Цель: сделать архив маленьким и «чистым», убрав **технический мусор** (сборочные артефакты/кеши/логи), но оставив весь исходный код, SQL и документацию.
 
-## P0 — блокирующие ошибки
+> Важно: я не буду помогать «скрывать факт использования AI» или делать что‑то обманное. Но могу помочь привести проект в аккуратный вид и убрать только лишние файлы, которые появляются автоматически.
 
-- [x] Исправить падение при добавлении замера: `PG error 42883: operator does not exist: record ->> unknown`.
-  - Лог (пример): `2025-12-16T18:29:30.9055870Z [ERROR] [ui] plant measurement insert error: ...`
-  - [x] Исправление внесено в SQL-скрипты (заменено чтение `x->>'field'` на `x.value->>'field'`).
-  - [x] Также исправлено: `PG error 42883: function jsonb_array_elements_with_ordinality(jsonb) does not exist` (заменено на `jsonb_array_elements(...) WITH ORDINALITY` в wrapper-процедуре).
-  - [x] Применить обновлённые SQL-скрипты к БД заводов (ANPZ/KNPZ): `sql/*/04_function_sp_insert_measurement_batch.sql`.
-  - [x] Повторить ручной сценарий в UI и убедиться, что замер добавляется без ошибок.
-  - Где править (предположительно):
-    - `sql/anpz/04_function_sp_insert_measurement_batch.sql` (обработка JSON точек)
-    - `sql/krnpz/04_function_sp_insert_measurement_batch.sql` (обработка JSON точек)
-    - `sql/anpz/05_procedure_wrapper.sql`, `sql/krnpz/05_procedure_wrapper.sql` (wrapper-процедура)
-    - UI-обвязка/логирование: `src/OilErp.Ui/ViewModels/PlantMeasurementsTabViewModel.cs`
+## Шаг 0 — понять текущий размер и что больше всего весит
+- [ ] Посмотреть общий размер папки проекта (чтобы понимать масштаб): `du -sh .`
+- [ ] Найти самые тяжелые папки/файлы (обычно это `bin/obj/.idea`): `du -sh * | sort -h`
+- [ ] Быстро посмотреть «подозрительно большие» файлы: `find . -type f -size +200k -print`
 
-- [x] Исправить падение при вставке батча в central через FDW: `PG error 23502: null value in column "id" of relation "measurement_batches" violates not-null constraint`.
-  - Возможные причины:
-    - Central БД: таблица `public.measurement_batches` создана ранее без `identity/default` на `id` (тогда `ALTER TABLE ... ADD IDENTITY` лечит).
-    - FDW (часто): на заводе foreign table `central_ft.measurement_batches` включает колонку `id`, и `postgres_fdw` отправляет `NULL` вместо remote default/identity.
-  - [x] В репозитории добавлен upgrade-блок в `sql/central/01_tables.sql` (добавляет `GENERATED ... AS IDENTITY` на `id`, если default отсутствует).
-  - [x] В репозитории исправлен FDW: `sql/anpz/02_fdw.sql` и `sql/krnpz/02_fdw.sql` больше не включают `id/created_at` в foreign table.
-  - [x] Применить FDW-скрипт в БД завода (ANPZ/KNPZ): `sql/*/02_fdw.sql`.
-  - [x] Проверить/починить `id` в central при необходимости: `sql/central/01_tables.sql` (upgrade-блок).
+## Шаг 1 — удалить сборочные артефакты .NET (самое важное)
+Обычно именно это дает максимальное снижение размера.
+- [ ] Удалить `bin/` и `obj/` во всех проектах:
+  - `find src -type d \\( -name bin -o -name obj \\) -prune -exec rm -rf {} +`
+- [ ] Убедиться, что не осталось `bin/obj`: `find src -type d \\( -name bin -o -name obj \\) -print`
 
-- [x] Исправить падение при обновлении замеров с пустым поиском: `42P08: could not determine data type of parameter $1`.
-  - Лог (пример): `2025-12-18T17:38:46.0525660Z [ERROR] [ui] plant measurements refresh error: 42P08: could not determine data type of parameter $1`.
-  - [x] В UI параметр `@q` передаётся типизированным (`NpgsqlDbType.Text`), чтобы Postgres понимал тип даже при `NULL`.
-  - Где править: `src/OilErp.Ui/ViewModels/PlantMeasurementsTabViewModel.cs`, `src/OilErp.Ui/ViewModels/CentralMeasurementsTabViewModel.cs`
+## Шаг 2 — удалить IDE‑мусор (Rider/IDEA/VS)
+- [ ] Удалить `.idea/` (у тебя он есть в `src/.idea`): `rm -rf src/.idea`
+- [ ] Удалить `.vs/` (если появилось): `rm -rf .vs`
+- [ ] Удалить пользовательские файлы/кеши (если есть): `find . -name \"*.user\" -o -name \"*.suo\" -o -name \"*.cache\"`
 
-## P1 — UX/UI и консистентность интерфейса
+## Шаг 3 — удалить локальные логи/временные файлы
+- [ ] Удалить все `*.log` внутри проекта, если они случайно попали: `find . -name \"*.log\" -delete`
+- [ ] Удалить OS‑мусор (macOS): `find . -name \".DS_Store\" -delete`
 
-- [x] Подсветка/выделение выбранного трубопровода/строки при добавлении замера (должно быть ясно, что выбрано).
-  - Сделано: добавлен фон для `ListBoxItem:selected` и привязка фона строки к контейнеру.
-  - Где править: `src/OilErp.Ui/Views/MainWindow.axaml`
-- [x] Привести действия к одному стилю: либо везде иконки, либо везде текст.
-  - Сделано: кнопки `+` заменены на `Добавить`/`Добавить замер`, добавлен “primary” стиль для основного действия.
-  - Где править: `src/OilErp.Ui/Views/MainWindow.axaml`, `src/OilErp.Ui/App.axaml`
-- [x] Сделать кнопку “Добавить замер” более заметной (сейчас сливается с фоном).
-  - Сделано: “primary” стиль + понятная подпись.
-  - Где править: `src/OilErp.Ui/Views/MainWindow.axaml`, `src/OilErp.Ui/App.axaml`
-- [x] Больше визуальных подсказок (hover/focus/disabled/progress), чтобы было понятно, что происходит.
-  - Сделано: подсветка выделения/наведения в списках (ListBox), “primary” стиль для основных действий (+ hover/pressed), прогресс‑индикаторы на вкладках, стиль `Button:disabled`.
-  - Где править: `src/OilErp.Ui/Views/MainWindow.axaml`, `src/OilErp.Ui/App.axaml`
+## Шаг 4 — оставить только то, что нужно преподавателю
+Минимальный набор папок/файлов для сдачи (по смыслу проекта):
+- [ ] `src/` (без `bin/obj/.idea`)
+- [ ] `sql/`
+- [ ] `docs/`
+- [ ] `AGENTS.md`
+- [ ] `src/OilErp.sln` и `*.csproj` (они и так в `src/`)
 
-## P1 — корректность ввода и CRUD
+Опционально можно НЕ включать в архив:
+- [ ] `docs/Тексты/` если это черновики и не требуется (проверь требования препода).
 
-- [x] Валидация ввода при добавлении замера (числовая толщина, обязательные поля; запрет “любых символов” там, где ожидается число).
-  - Сделано: толщина теперь вводится как текст + парсинг/валидация перед сохранением.
-  - Где править: `src/OilErp.Ui/ViewModels/PlantMeasurementEditWindowViewModel.cs`, `src/OilErp.Ui/Views/PlantMeasurementEditWindow.axaml`
-- [x] Довести CRUD по замерам: редактирование/удаление (сейчас нет или неочевидно).
-  - Сделано: редактирование/удаление последнего замера + окно “История” для выбора и редактирования/удаления конкретного замера.
-  - Где править (предположительно): `src/OilErp.Ui/Views/*Measurements*.axaml`, `src/OilErp.Ui/ViewModels/*Measurements*.cs`, при необходимости SQL-процедуры в `sql/anpz` и `sql/krnpz`.
+## Шаг 5 — проверить, что в проекте нет секретов
+- [ ] Убедиться, что нет файлов с паролями/строками подключения: `rg -n \"Password=|Username=|Host=|OILERP__DB__CONN|OIL_ERP_PG\" .`
+- [ ] Если есть `appsettings*.json` с секретами — не включать в архив (или заменить на пример без пароля).
 
-## P2 — справочники/смысловые поля
+## Шаг 6 — собрать «правильный» архив
+Лучше всего собирать архив **из отфильтрованного набора файлов**, а не «весь проект целиком».
+- [ ] Вариант A (самый простой): после чистки просто заархивировать папку проекта.
+- [ ] Вариант B (предпочтительный, если используешь git): `git archive --format=zip -o OilErp.zip HEAD` (в архив попадет только то, что закоммичено, без мусора).
 
-- [x] Пересмотреть “Локация” и “Статус”: объяснить назначение или заменить на понятные предустановленные варианты; для заводского режима ставить статус `OK` по умолчанию.
-  - Сделано: в окне редактирования добавлена подсказка по назначению полей; в заводском справочнике оборудования статус по умолчанию `OK` + выпадающий список предустановок; на экране замеров пустой статус отображается как `OK`; при автосоздании оборудования через вставку замера в SQL статус также `OK`.
-  - Где править: `src/OilErp.Ui/ViewModels/PlantEquipmentTabViewModel.cs`, `src/OilErp.Ui/ViewModels/EquipmentEditWindowViewModel.cs`, `src/OilErp.Ui/Views/EquipmentEditWindow.axaml`, `src/OilErp.Ui/ViewModels/PlantMeasurementsTabViewModel.cs`, `sql/anpz/05_procedure_wrapper.sql`, `sql/krnpz/05_procedure_wrapper.sql`
+## Шаг 7 — финальная проверка размера и содержимого
+- [ ] Проверить размер архива: `ls -lh *.zip`
+- [ ] Убедиться, что внутри нет `bin/obj/.idea`: открыть архив и проверить структуру.
 
-## P2 — темы и нейминг
-
-- [x] Убрать синий цвет в тёмной теме (заменить на белый/нейтральный).
-  - Где править: `src/OilErp.Ui/ViewModels/ThemePalette.cs`, `src/OilErp.Ui/App.axaml`
-- [x] Переименовать темы на “Тёмная” и “Светлая” (без лишних слов).
-  - Где править: `src/OilErp.Ui/ViewModels/MainWindowViewModel.cs`, `src/OilErp.Ui/Views/MainWindow.axaml`
-- [x] Привести названия профилей/БД в UI к “ANPZ” и “KNPZ” (капсом, как аббревиатуры).
-  - Сделано: отображение профилей/заголовков/кода завода в UI теперь `ANPZ`/`KNPZ`; добавлен алиас `KRNPZ -> KNPZ` для совместимости; имя БД берётся из `select current_database()` и форматируется в `ANPZ`/`KNPZ`/`Central`.
-  - Где править: `src/OilErp.Ui/Services/KernelGateway.cs`, `src/OilErp.Ui/ViewModels/MainWindowViewModel.cs`, `src/OilErp.Ui/ViewModels/PlantMeasurementsTabViewModel.cs`, `src/OilErp.Ui/Views/ConnectWindow.axaml`, `src/OilErp.Ui/Services/MeasurementIngestionService.cs`, `src/OilErp.Ui/Services/StoragePortFactory.cs`
-
-## P3 — работа с данными (импорт/экспорт) и удобство поиска
-
-- [x] Экспорт замеров в `csv`/`xlsx` (Excel), а также `json` для дальнейшей работы.
-  - Сделано:
-    - Завод: экспорт из окна “История замеров” (по одному трубопроводу).
-    - Central/Завод: отдельная кнопка “Импорт/Экспорт” на вкладке “Замеры” (central — все заводы сразу, завод — только текущий).
-  - Где править: `src/OilErp.Ui/ViewModels/PlantMeasurementHistoryWindowViewModel.cs`, `src/OilErp.Ui/ViewModels/PlantMeasurementsTransferWindowViewModel.cs`, `src/OilErp.Ui/ViewModels/CentralMeasurementsTransferWindowViewModel.cs`, `src/OilErp.Ui/Services/UiFilePicker.cs`, `src/OilErp.Ui/Services/SimpleXlsxWriter.cs`, `src/OilErp.Ui/Views/MainWindow.axaml`
-- [x] Импорт тех же форматов в UI (если нужен именно через UI, а не через CLI).
-  - Сделано:
-    - Завод: импорт CSV/JSON в окно “История замеров” и/или через кнопку “Импорт/Экспорт”.
-    - Central: импорт CSV/JSON через кнопку “Импорт/Экспорт” (пишет в `public.measurement_batches`).
-  - Где править: `src/OilErp.Ui/ViewModels/PlantMeasurementHistoryWindowViewModel.cs`, `src/OilErp.Ui/ViewModels/PlantMeasurementsTransferWindowViewModel.cs`, `src/OilErp.Ui/ViewModels/CentralMeasurementsTransferWindowViewModel.cs`, `src/OilErp.Ui/Services/UiFilePicker.cs`
-- [x] Фильтрация списка замеров (дата/статус/локация/трубопровод).
-  - Сделано: фильтр по коду/локации/статусу оборудования в заводской таблице; в “Истории” — фильтр по диапазону дат + поиск по label/note.
-  - Где править: `src/OilErp.Ui/ViewModels/PlantMeasurementsTabViewModel.cs`, `src/OilErp.Ui/ViewModels/PlantMeasurementHistoryWindowViewModel.cs`
-- [x] Сортировка списка замеров (дата/статус/локация/трубопровод).
-  - Сделано: сортировка оборудования (в т.ч. по дате последнего замера) + сортировка истории замеров (время/толщина/label).
-  - Где править: `src/OilErp.Ui/ViewModels/PlantMeasurementsTabViewModel.cs`, `src/OilErp.Ui/ViewModels/PlantMeasurementHistoryWindowViewModel.cs`, `src/OilErp.Ui/Views/PlantMeasurementHistoryWindow.axaml`
-- [x] Группировка списка замеров (дата/статус/локация/трубопровод).
-  - Сделано: группировка оборудования по статусу/локации/дате последнего замера/префиксу кода; в “Истории” — группировка по дням.
-  - Где править: `src/OilErp.Ui/ViewModels/PlantMeasurementsTabViewModel.cs`, `src/OilErp.Ui/Views/MainWindow.axaml`, `src/OilErp.Ui/ViewModels/PlantMeasurementHistoryWindowViewModel.cs`
-- [x] Поиск замеров по основным полям (дата/статус/локация/трубопровод) + общий поиск по UI во всех окнах и по всем базам.
-  - Сделано: поисковые строки на ключевых вкладках (central/plant справочники и замеры) + поиск в “Истории”; Enter запускает поиск, при вводе есть авто‑обновление (debounce).
-  - Где править: `src/OilErp.Ui/Views/MainWindow.axaml`, `src/OilErp.Ui/ViewModels/*TabViewModel.cs`, `src/OilErp.Ui/ViewModels/PlantMeasurementHistoryWindowViewModel.cs`
-
-- [x] Central: аналитика должна включать трубопроводы со всех заводов, даже если они не заведены вручную в `assets_global`.
-  - Сделано: аналитика строится по `public.measurement_batches` + `assets_global` + `analytics_cr` (с fallback через `public.fn_calc_cr`), чтобы новое оборудование появлялось сразу после первых замеров.
-  - Важно: если в CENTRAL не видно замеры других заводов — проверьте, что в заводской БД `central_srv` указывает на ту же central БД (host/port/dbname); автосинхронизация FDW берёт `OILERP__DB__CONN` / `OIL_ERP_PG`.
-  - Где править: `src/OilErp.Ui/ViewModels/AnalyticsPanelViewModel.cs`, `sql/*/02_fdw.sql`, `src/OilErp.Infrastructure/Util/DatabaseInventory.cs`
-- [x] Central: вкладка “Замеры” должна показывать оборудование со всех заводов + сортировка/группировка как на заводах.
-  - Сделано: загрузка оборудования через FULL JOIN `assets_global` и last_batch; добавлены сортировка/группировка и отображение завода; добавление замеров ограничено только `CENTRAL`.
-  - Где править: `src/OilErp.Ui/ViewModels/CentralMeasurementsTabViewModel.cs`, `src/OilErp.Ui/Views/MainWindow.axaml`
-
-## P4 — рефакторинг: уменьшить количество файлов (manual)
-
-Цель: **сократить число файлов**, не превращая проект в “один гигантский файл”. Правило: объединяем пачки мелких файлов (≈ до 150 строк), если итоговый файл получается **разумным** (обычно до ~400–600 строк) и логически цельным.
-
-### Общие правила (как делать)
-- [ ] Договориться о лимитах: условно “файл до 600 строк ок”, “файл >1000 строк — лучше не делать”.
-- [ ] При объединении сохранять namespace (по возможности), чтобы не делать массовый рефакторинг `using`.
-- [ ] В начале объединённого файла добавить шапку‑комментарий “Merged from: ...” со списком исходных файлов.
-- [ ] После каждого шага (опционально): `dotnet build src/OilErp.sln -c Release --no-restore` или хотя бы сборка 1 проекта, чтобы быстро ловить ошибки.
-
-### `OilErp.Core` — максимум выигрыша (много мелких DTO/Service)
-- [x] Объединить DTO из `src/OilErp.Core/Dto/*` в 2–3 файла:
-  - пример разбиения: `Specs.cs` (CommandSpec/QuerySpec/OperationResultOfT), `AnalyticsDtos.cs` (EvalRiskRowDto/PlantCrStatDto/MeasurementPointDto), `DatabaseProfile.cs` оставить отдельным или тоже перенести.
-  - удалить исходные файлы после переноса.
-- [x] Объединить central‑сервисы в 1 файл `src/OilErp.Core/Services/Central/CentralServices.cs`:
-  - перенести классы из `src/OilErp.Core/Services/Central/Fn*.cs` и `src/OilErp.Core/Services/Central/Sp*.cs`;
-  - удалить исходные файлы.
-- [x] Объединить plant‑сервисы в 2 файла (без смены namespace):
-  - `src/OilErp.Core/Services/Plants/ANPZ/AnpzServices.cs` (оба `SpInsertMeasurementBatch*Service`);
-  - `src/OilErp.Core/Services/Plants/KRNPZ/KrnpzServices.cs` (оба `SpInsertMeasurementBatch*Service`);
-  - удалить исходные файлы.
-- [x] Объединить DTO из `src/OilErp.Core/Services/Dtos/*` в 1 файл и убрать папку `Services/Dtos`:
-  - вариант: перенести в `src/OilErp.Core/Dto/ServiceDtos.cs` (тогда папку `Services/Dtos` можно удалить полностью).
-
-### `OilErp.Infrastructure` — точечно
-- [x] Сжать `src/OilErp.Infrastructure/Config/StorageConfig.cs` + `src/OilErp.Infrastructure/Config/StorageConfigProvider.cs` в один файл (например `StorageConfig.cs`) и удалить второй.
-- [x] Удалить пустую папку `src/OilErp.Infrastructure/Logging` (если реально нигде не используется).
-
-### `OilErp.Ui` — убрать “мелочь” (без трогания больших VM)
-- [x] Объединить модели замеров в 1 файл:
-  - `src/OilErp.Ui/Models/AddMeasurementRequest.cs`
-  - `src/OilErp.Ui/Models/MeasurementSeries.cs`
-  - `src/OilErp.Ui/Models/MeasurementSubmissionResult.cs`
-  - итог: один файл (например `src/OilErp.Ui/Models/MeasurementModels.cs`), удалить остальные.
-- [x] Объединить конвертеры в 1 файл и (если хочется) убрать папку:
-  - `src/OilErp.Ui/Converters/BoolInvertConverter.cs`
-  - `src/OilErp.Ui/Converters/DatabaseProfileDisplayConverter.cs`
-  - итог: `src/OilErp.Ui/Converters/Converters.cs` (или один файл в корне `src/OilErp.Ui/Converters.cs`), удалить исходные.
-- [x] Объединить маленькие VM в “Common” файл:
-  - `src/OilErp.Ui/ViewModels/ViewModelBase.cs`
-  - `src/OilErp.Ui/ViewModels/ThemeOption.cs` (можно перенести прямо в `ThemePalette.cs`)
-  - `src/OilErp.Ui/ViewModels/ConfirmDialogViewModel.cs`
-  - итог: например `src/OilErp.Ui/ViewModels/CommonViewModels.cs`, удалить исходные.
-- [x] Сжать connect‑VM в один файл:
-  - `src/OilErp.Ui/ViewModels/ConnectWindowViewModel.cs`
-  - `src/OilErp.Ui/ViewModels/ConnectionFormViewModel.cs`
-  - итог: `src/OilErp.Ui/ViewModels/ConnectViewModels.cs`, удалить исходные.
-- [x] Убрать файл‑однострочник `src/OilErp.Ui/Services/AppLogger.cs`:
-  - перенести `global using AppLogger = ...` в любой существующий “верхний” `.cs` (например `src/OilErp.Ui/Program.cs` или `src/OilErp.Ui/Services/KernelGateway.cs`);
-  - удалить `src/OilErp.Ui/Services/AppLogger.cs`.
-- [x] Объединить UI‑хелперы диалогов в 1 файл:
-  - `src/OilErp.Ui/Services/UiDialogHost.cs`
-  - `src/OilErp.Ui/Services/UiFilePicker.cs`
-  - итог: `src/OilErp.Ui/Services/UiDialogs.cs`, удалить исходные.
-
-### `OilErp.Tests.Runner` — укрупнить смоуки/фейки
-- [x] Объединить мелкие смоук‑классы в 1 файл:
-  - кандидаты: `src/OilErp.Tests.Runner/Smoke/AsyncSmokeTests.cs`, `src/OilErp.Tests.Runner/Smoke/NegativeSmokeTests.cs`, `src/OilErp.Tests.Runner/Smoke/BootstrapSmokeTests.cs`
-  - вариант: перенести в `src/OilErp.Tests.Runner/Smoke/ExtendedSmokeTests.cs` и удалить исходные файлы.
-- [x] Объединить фейковые порты в 1 файл:
-  - `src/OilErp.Tests.Runner/TestDoubles/FakeStoragePort.cs`
-  - `src/OilErp.Tests.Runner/TestDoubles/TransactionalFakeStoragePort.cs`
-  - итог: оставить один файл (например `FakeStoragePort.cs`), второй удалить.
+## Шаг 8 — быстрый чек «проект запускается»
+- [ ] Быстро проверить запуск UI (он сам прогонит smoke‑suite): `dotnet run --project src/OilErp.Ui`

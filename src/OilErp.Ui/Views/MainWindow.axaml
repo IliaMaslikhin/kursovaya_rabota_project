@@ -50,6 +50,12 @@
                             Orientation="Horizontal"
                             Spacing="6"
                             HorizontalAlignment="Right">
+                    <Button Content="Генерация случайных данных"
+                            Classes="success"
+                            Command="{Binding GenerateRandomDataCommand}"/>
+                    <Button Content="Очистить базу"
+                            Classes="danger"
+                            Command="{Binding ClearDatabaseCommand}"/>
                     <Button Content="Сменить базу"
                             Command="{Binding ChangeConnectionCommand}"/>
                 </StackPanel>
@@ -79,13 +85,21 @@
                                             Classes="primary"
                                             Command="{Binding AddCommand}"/>
                                     <TextBox Width="220"
-                                             Watermark="Поиск (код/локация/статус)"
+                                             Watermark="Поиск (код/название/тип/завод)"
                                              Text="{Binding FilterText}">
                                         <TextBox.KeyBindings>
                                             <KeyBinding Gesture="Enter"
                                                         Command="{Binding RefreshCommand}"/>
                                         </TextBox.KeyBindings>
                                     </TextBox>
+                                    <ComboBox Width="180"
+                                              ToolTip.Tip="Сортировка оборудования"
+                                              ItemsSource="{Binding EquipmentSortOptions}"
+                                              SelectedItem="{Binding SelectedEquipmentSort}"/>
+                                    <ComboBox Width="240"
+                                              ToolTip.Tip="Группировка списка"
+                                              ItemsSource="{Binding EquipmentGroupOptions}"
+                                              SelectedItem="{Binding SelectedEquipmentGroup}"/>
                                     <Button Content="Сброс"
                                             Command="{Binding ClearFilterCommand}"/>
                                     <Button Content="Изменить"
@@ -139,8 +153,8 @@
                                 </Border>
 
                                 <ListBox Grid.Row="2"
-                                         ItemsSource="{Binding Items}"
-                                         SelectedItem="{Binding SelectedItem}"
+                                         ItemsSource="{Binding DisplayItems}"
+                                         SelectedItem="{Binding SelectedDisplayItem}"
                                          BorderBrush="{DynamicResource Brush.Border}"
                                          BorderThickness="1"
                                          Background="{DynamicResource Brush.PanelBackground}">
@@ -155,7 +169,18 @@
                                             <Setter Property="Background" Value="{DynamicResource Brush.AccentMuted}"/>
                                         </Style>
                                     </ListBox.Styles>
-                                    <ListBox.ItemTemplate>
+                                    <ListBox.DataTemplates>
+                                        <DataTemplate x:DataType="vm:EquipmentGroupHeaderViewModel">
+                                            <Border Padding="10,8"
+                                                    Background="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Background}"
+                                                    BorderBrush="{DynamicResource Brush.Border}"
+                                                    BorderThickness="0,0,0,1">
+                                                <TextBlock Text="{Binding DisplayTitle}"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource Brush.TextPrimary}"
+                                                           TextWrapping="NoWrap"/>
+                                            </Border>
+                                        </DataTemplate>
                                         <DataTemplate x:DataType="vm:EquipmentItemViewModel">
                                             <Border Padding="10"
                                                     Background="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Background}"
@@ -187,14 +212,14 @@
                                                     </Border>
                                                     <Border Grid.Column="3"
                                                             Padding="6,2">
-                                                        <TextBlock Text="{Binding PlantCode}"
+                                                        <TextBlock Text="{Binding PlantCodeDisplay}"
                                                                    Foreground="{DynamicResource Brush.TextSecondary}"
                                                                    TextWrapping="NoWrap"/>
                                                     </Border>
                                                 </Grid>
                                             </Border>
                                         </DataTemplate>
-                                    </ListBox.ItemTemplate>
+                                    </ListBox.DataTemplates>
                                 </ListBox>
                             </Grid>
                         </DataTemplate>
@@ -216,7 +241,7 @@
                                                 <Setter Property="Margin" Value="0,0,8,8"/>
                                             </Style>
                                         </WrapPanel.Styles>
-                                        <TextBlock Text="CENTRAL"
+                                        <TextBlock Text="ЦЕНТРАЛЬНАЯ"
                                                    FontWeight="SemiBold"
                                                    Foreground="{DynamicResource Brush.TextPrimary}"
                                                    VerticalAlignment="Center"/>
@@ -238,6 +263,10 @@
                                                   ToolTip.Tip="Группировка списка"
                                                   ItemsSource="{Binding EquipmentGroupOptions}"
                                                   SelectedItem="{Binding SelectedEquipmentGroup}"/>
+                                        <ComboBox Width="220"
+                                                  ToolTip.Tip="Порядок дат"
+                                                  ItemsSource="{Binding ColumnSortOptions}"
+                                                  SelectedItem="{Binding SelectedColumnSort}"/>
                                         <Button Content="Сброс"
                                                 Command="{Binding ClearFilterCommand}"/>
                                         <Button Content="Добавить замер"
@@ -245,7 +274,7 @@
                                                 ToolTip.Tip="Выберите оборудование и добавьте замер (central)"
                                                 Command="{Binding AddMeasurementCommand}"/>
                                         <Button Content="Импорт/Экспорт"
-                                                ToolTip.Tip="Экспорт/импорт замеров по всем заводам (CENTRAL)"
+                                                ToolTip.Tip="Экспорт/импорт замеров по всем заводам (центральная БД)"
                                                 Command="{Binding OpenTransferCommand}"/>
                                         <ProgressBar IsIndeterminate="True"
                                                      IsVisible="{Binding IsBusy}"
@@ -263,37 +292,67 @@
                                             BorderBrush="{DynamicResource Brush.Border}"
                                             BorderThickness="1"
                                             CornerRadius="8">
-                                        <StackPanel Orientation="Horizontal"
-                                                    Spacing="0">
-                                            <Border Width="160"
-                                                    Padding="6,0"
-                                                    BorderBrush="{DynamicResource Brush.Border}"
-                                                    BorderThickness="0,0,1,0">
-                                                <TextBlock Text="Код"
-                                                           Foreground="{DynamicResource Brush.TextSecondary}"/>
-                                            </Border>
-                                            <Border Width="240"
-                                                    Padding="6,0"
-                                                    BorderBrush="{DynamicResource Brush.Border}"
-                                                    BorderThickness="0,0,1,0">
-                                                <TextBlock Text="Название"
-                                                           Foreground="{DynamicResource Brush.TextSecondary}"/>
-                                            </Border>
-                                            <Border Width="160"
-                                                    Padding="6,0"
-                                                    BorderBrush="{DynamicResource Brush.Border}"
-                                                    BorderThickness="0,0,1,0">
-                                                <TextBlock Text="Тип"
-                                                           Foreground="{DynamicResource Brush.TextSecondary}"/>
-                                            </Border>
-                                            <Border Width="120"
-                                                    Padding="6,0"
-                                                    BorderBrush="{DynamicResource Brush.Border}"
-                                                    BorderThickness="0,0,1,0">
-                                                <TextBlock Text="Завод"
-                                                           Foreground="{DynamicResource Brush.TextSecondary}"/>
-                                            </Border>
-                                            <ItemsControl ItemsSource="{Binding Columns}">
+                                        <Grid ColumnDefinitions="Auto,*"
+                                              RowDefinitions="Auto,Auto">
+                                            <Grid Grid.Row="0"
+                                                  Grid.RowSpan="2">
+                                                <Grid ColumnDefinitions="160,240,160,120">
+                                                    <Border BorderBrush="{DynamicResource Brush.Border}"
+                                                            BorderThickness="0,0,1,0"
+                                                            Padding="6,0">
+                                                        <TextBlock Text="Код"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                    </Border>
+                                                    <Border Grid.Column="1"
+                                                            BorderBrush="{DynamicResource Brush.Border}"
+                                                            BorderThickness="0,0,1,0"
+                                                            Padding="6,0">
+                                                        <TextBlock Text="Название"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                    </Border>
+                                                    <Border Grid.Column="2"
+                                                            BorderBrush="{DynamicResource Brush.Border}"
+                                                            BorderThickness="0,0,1,0"
+                                                            Padding="6,0">
+                                                        <TextBlock Text="Тип"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                    </Border>
+                                                    <Border Grid.Column="3"
+                                                            BorderBrush="{DynamicResource Brush.Border}"
+                                                            BorderThickness="0,0,1,0"
+                                                            Padding="6,0">
+                                                        <TextBlock Text="Завод"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                    </Border>
+                                                </Grid>
+                                            </Grid>
+
+                                            <ItemsControl Grid.Row="0"
+                                                          Grid.Column="1"
+                                                          ItemsSource="{Binding ColumnGroups}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel Orientation="Horizontal"/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:MeasurementDateGroupHeaderViewModel">
+                                                        <Border Width="{Binding Width}"
+                                                                Padding="6,0"
+                                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                                BorderThickness="0,0,1,0">
+                                                            <TextBlock Text="{Binding Title}"
+                                                                       Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                       TextWrapping="NoWrap"
+                                                                       TextAlignment="Center"/>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
+                                            <ItemsControl Grid.Row="1"
+                                                          Grid.Column="1"
+                                                          ItemsSource="{Binding Columns}">
                                                 <ItemsControl.ItemsPanel>
                                                     <ItemsPanelTemplate>
                                                         <StackPanel Orientation="Horizontal"/>
@@ -307,12 +366,13 @@
                                                                 BorderThickness="0,0,1,0">
                                                             <TextBlock Text="{Binding Header}"
                                                                        Foreground="{DynamicResource Brush.TextSecondary}"
-                                                                       TextWrapping="NoWrap"/>
+                                                                       TextWrapping="NoWrap"
+                                                                       TextAlignment="Center"/>
                                                         </Border>
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
-                                        </StackPanel>
+                                        </Grid>
                                     </Border>
 
                                     <ListBox ItemsSource="{Binding DisplayRows}"
@@ -379,7 +439,7 @@
                                                                 Padding="6,0"
                                                                 BorderBrush="{DynamicResource Brush.Border}"
                                                                 BorderThickness="0,0,1,0">
-                                                            <TextBlock Text="{Binding PlantCode}"
+                                                            <TextBlock Text="{Binding PlantCodeDisplay}"
                                                                        Foreground="{DynamicResource Brush.TextSecondary}"
                                                                        TextWrapping="NoWrap"/>
                                                         </Border>
@@ -506,7 +566,7 @@
                                                                                    FontWeight="SemiBold"
                                                                                    Foreground="{DynamicResource Brush.TextSecondary}"/>
                                                                         <TextBlock Grid.Column="1"
-                                                                                   Text="CR"
+                                                                                   Text="СК"
                                                                                    FontWeight="SemiBold"
                                                                                    Foreground="{DynamicResource Brush.TextSecondary}"/>
                                                                         <TextBlock Grid.Column="2"
@@ -622,19 +682,19 @@
                                                 BorderBrush="{DynamicResource Brush.Border}"
                                                 BorderThickness="0,0,1,0"
                                                 Padding="6,2">
-                                            <TextBlock Text="Low"
+                                            <TextBlock Text="Низкий"
                                                        Foreground="{DynamicResource Brush.TextSecondary}"/>
                                         </Border>
                                         <Border Grid.Column="2"
                                                 BorderBrush="{DynamicResource Brush.Border}"
                                                 BorderThickness="0,0,1,0"
                                                 Padding="6,2">
-                                            <TextBlock Text="Med"
+                                            <TextBlock Text="Средний"
                                                        Foreground="{DynamicResource Brush.TextSecondary}"/>
                                         </Border>
                                         <Border Grid.Column="3"
                                                 Padding="6,2">
-                                            <TextBlock Text="High"
+                                            <TextBlock Text="Высокий"
                                                        Foreground="{DynamicResource Brush.TextSecondary}"/>
                                         </Border>
                                     </Grid>
@@ -759,13 +819,21 @@
                                             Classes="primary"
                                             Command="{Binding AddCommand}"/>
                                     <TextBox Width="220"
-                                             Watermark="Поиск (имя)"
+                                             Watermark="Поиск (код/локация/статус)"
                                              Text="{Binding FilterText}">
                                         <TextBox.KeyBindings>
                                             <KeyBinding Gesture="Enter"
                                                         Command="{Binding RefreshCommand}"/>
                                         </TextBox.KeyBindings>
                                     </TextBox>
+                                    <ComboBox Width="180"
+                                              ToolTip.Tip="Сортировка оборудования"
+                                              ItemsSource="{Binding EquipmentSortOptions}"
+                                              SelectedItem="{Binding SelectedEquipmentSort}"/>
+                                    <ComboBox Width="240"
+                                              ToolTip.Tip="Группировка списка"
+                                              ItemsSource="{Binding EquipmentGroupOptions}"
+                                              SelectedItem="{Binding SelectedEquipmentGroup}"/>
                                     <Button Content="Сброс"
                                             Command="{Binding ClearFilterCommand}"/>
                                     <Button Content="Изменить"
@@ -819,8 +887,8 @@
                                 </Border>
 
                                 <ListBox Grid.Row="2"
-                                         ItemsSource="{Binding Items}"
-                                         SelectedItem="{Binding SelectedItem}"
+                                         ItemsSource="{Binding DisplayItems}"
+                                         SelectedItem="{Binding SelectedDisplayItem}"
                                          BorderBrush="{DynamicResource Brush.Border}"
                                          BorderThickness="1"
                                          Background="{DynamicResource Brush.PanelBackground}">
@@ -835,7 +903,18 @@
                                             <Setter Property="Background" Value="{DynamicResource Brush.AccentMuted}"/>
                                         </Style>
                                     </ListBox.Styles>
-                                    <ListBox.ItemTemplate>
+                                    <ListBox.DataTemplates>
+                                        <DataTemplate x:DataType="vm:EquipmentGroupHeaderViewModel">
+                                            <Border Padding="10,8"
+                                                    Background="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Background}"
+                                                    BorderBrush="{DynamicResource Brush.Border}"
+                                                    BorderThickness="0,0,0,1">
+                                                <TextBlock Text="{Binding DisplayTitle}"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource Brush.TextPrimary}"
+                                                           TextWrapping="NoWrap"/>
+                                            </Border>
+                                        </DataTemplate>
                                         <DataTemplate x:DataType="vm:PlantEquipmentItemViewModel">
                                             <Border Padding="10"
                                                     Background="{Binding RelativeSource={RelativeSource AncestorType=ListBoxItem}, Path=Background}"
@@ -874,7 +953,7 @@
                                                 </Grid>
                                             </Border>
                                         </DataTemplate>
-                                    </ListBox.ItemTemplate>
+                                    </ListBox.DataTemplates>
                                 </ListBox>
                             </Grid>
                         </DataTemplate>
@@ -896,7 +975,7 @@
                                                 <Setter Property="Margin" Value="0,0,8,8"/>
                                             </Style>
                                         </WrapPanel.Styles>
-                                        <TextBlock Text="{Binding PlantCode}"
+                                        <TextBlock Text="{Binding PlantCodeDisplay}"
                                                    FontWeight="SemiBold"
                                                    Foreground="{DynamicResource Brush.TextPrimary}"
                                                    VerticalAlignment="Center"/>
@@ -919,6 +998,10 @@
                                                   ToolTip.Tip="Группировка списка"
                                                   ItemsSource="{Binding EquipmentGroupOptions}"
                                                   SelectedItem="{Binding SelectedEquipmentGroup}"/>
+                                        <ComboBox Width="220"
+                                                  ToolTip.Tip="Порядок дат"
+                                                  ItemsSource="{Binding ColumnSortOptions}"
+                                                  SelectedItem="{Binding SelectedColumnSort}"/>
                                         <Button Content="Сброс"
                                                 Command="{Binding ClearFilterCommand}"/>
                                         <Button Content="Добавить замер"
@@ -950,30 +1033,60 @@
                                             BorderBrush="{DynamicResource Brush.Border}"
                                             BorderThickness="1"
                                             CornerRadius="8">
-                                        <StackPanel Orientation="Horizontal"
-                                                    Spacing="0">
-                                            <Border Width="160"
-                                                    Padding="6,0"
-                                                    BorderBrush="{DynamicResource Brush.Border}"
-                                                    BorderThickness="0,0,1,0">
-                                                <TextBlock Text="Код"
-                                                           Foreground="{DynamicResource Brush.TextSecondary}"/>
-                                            </Border>
-                                            <Border Width="240"
-                                                    Padding="6,0"
-                                                    BorderBrush="{DynamicResource Brush.Border}"
-                                                    BorderThickness="0,0,1,0">
-                                                <TextBlock Text="Локация"
-                                                           Foreground="{DynamicResource Brush.TextSecondary}"/>
-                                            </Border>
-                                            <Border Width="140"
-                                                    Padding="6,0"
-                                                    BorderBrush="{DynamicResource Brush.Border}"
-                                                    BorderThickness="0,0,1,0">
-                                                <TextBlock Text="Статус"
-                                                           Foreground="{DynamicResource Brush.TextSecondary}"/>
-                                            </Border>
-                                            <ItemsControl ItemsSource="{Binding Columns}">
+                                        <Grid ColumnDefinitions="Auto,*"
+                                              RowDefinitions="Auto,Auto">
+                                            <Grid Grid.Row="0"
+                                                  Grid.RowSpan="2">
+                                                <Grid ColumnDefinitions="160,240,140">
+                                                    <Border BorderBrush="{DynamicResource Brush.Border}"
+                                                            BorderThickness="0,0,1,0"
+                                                            Padding="6,0">
+                                                        <TextBlock Text="Код"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                    </Border>
+                                                    <Border Grid.Column="1"
+                                                            BorderBrush="{DynamicResource Brush.Border}"
+                                                            BorderThickness="0,0,1,0"
+                                                            Padding="6,0">
+                                                        <TextBlock Text="Локация"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                    </Border>
+                                                    <Border Grid.Column="2"
+                                                            BorderBrush="{DynamicResource Brush.Border}"
+                                                            BorderThickness="0,0,1,0"
+                                                            Padding="6,0">
+                                                        <TextBlock Text="Статус"
+                                                                   Foreground="{DynamicResource Brush.TextSecondary}"/>
+                                                    </Border>
+                                                </Grid>
+                                            </Grid>
+
+                                            <ItemsControl Grid.Row="0"
+                                                          Grid.Column="1"
+                                                          ItemsSource="{Binding ColumnGroups}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel Orientation="Horizontal"/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:MeasurementDateGroupHeaderViewModel">
+                                                        <Border Width="{Binding Width}"
+                                                                Padding="6,0"
+                                                                BorderBrush="{DynamicResource Brush.Border}"
+                                                                BorderThickness="0,0,1,0">
+                                                            <TextBlock Text="{Binding Title}"
+                                                                       Foreground="{DynamicResource Brush.TextSecondary}"
+                                                                       TextWrapping="NoWrap"
+                                                                       TextAlignment="Center"/>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
+                                            <ItemsControl Grid.Row="1"
+                                                          Grid.Column="1"
+                                                          ItemsSource="{Binding Columns}">
                                                 <ItemsControl.ItemsPanel>
                                                     <ItemsPanelTemplate>
                                                         <StackPanel Orientation="Horizontal"/>
@@ -987,12 +1100,13 @@
                                                                 BorderThickness="0,0,1,0">
                                                             <TextBlock Text="{Binding Header}"
                                                                        Foreground="{DynamicResource Brush.TextSecondary}"
-                                                                       TextWrapping="NoWrap"/>
+                                                                       TextWrapping="NoWrap"
+                                                                       TextAlignment="Center"/>
                                                         </Border>
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
-                                        </StackPanel>
+                                        </Grid>
                                     </Border>
 
                                     <ListBox ItemsSource="{Binding DisplayRows}"

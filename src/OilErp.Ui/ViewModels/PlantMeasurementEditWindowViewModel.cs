@@ -31,6 +31,13 @@ public sealed partial class PlantMeasurementEditWindowViewModel : ObservableObje
 
     public string PlantCode { get; }
 
+    public string PlantCodeDisplay => PlantCode switch
+    {
+        "ANPZ" => "АНПЗ",
+        "KNPZ" or "KRNPZ" => "КНПЗ",
+        _ => PlantCode
+    };
+
     public string EquipmentCode { get; }
 
     public string Label { get; }

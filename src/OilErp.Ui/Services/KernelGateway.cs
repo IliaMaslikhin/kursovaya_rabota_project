@@ -174,9 +174,9 @@ public sealed class KernelGateway
 
         var raw = databaseName.Trim();
         var upper = raw.ToUpperInvariant();
-        if (upper.Contains("ANPZ")) return "ANPZ";
-        if (upper.Contains("KRNPZ") || upper.Contains("KNPZ")) return "KNPZ";
-        if (upper.Contains("CENTRAL")) return "Central";
+        if (upper.Contains("ANPZ")) return "АНПЗ";
+        if (upper.Contains("KRNPZ") || upper.Contains("KNPZ")) return "КНПЗ";
+        if (upper.Contains("CENTRAL")) return "Центральная";
         return raw;
     }
 }

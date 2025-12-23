@@ -12,7 +12,7 @@
           Margin="18"
           RowSpacing="12">
         <StackPanel Spacing="4">
-            <TextBlock Text="{Binding PlantCode}"
+            <TextBlock Text="{Binding PlantCodeDisplay}"
                        Foreground="{DynamicResource Brush.TextSecondary}"/>
             <TextBlock Text="{Binding AssetCode}"
                        FontSize="18"
@@ -62,7 +62,7 @@
                     </Style>
                 </WrapPanel.Styles>
                 <TextBox Width="220"
-                         Watermark="Поиск (label/note)"
+                         Watermark="Поиск (метка/комментарий)"
                          Text="{Binding FilterText}"/>
                 <TextBox Width="220"
                          Watermark="С даты (например: 2025-12-17)"
@@ -95,7 +95,7 @@
                             <TextBlock Text="Дата"
                                        Foreground="{DynamicResource Brush.TextSecondary}"/>
                             <TextBlock Grid.Column="1"
-                                       Text="Label"
+                                       Text="Метка"
                                        Foreground="{DynamicResource Brush.TextSecondary}"/>
                             <TextBlock Grid.Column="2"
                                        Text="Толщина"

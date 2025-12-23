@@ -203,25 +203,31 @@ public sealed class DatabaseInventoryInspector
                 new("function", "public.fn_top_assets_by_cr", "p_limit integer"),
                 new("function", "public.fn_plant_cr_stats", "p_plant text, p_from timestamp with time zone, p_to timestamp with time zone"),
                 new("function", "public.trg_measurement_batches_bi_fn"),
+                new("function", "public.trg_asset_cleanup_requests_fn"),
                 new("trigger", "public.trg_measurement_batches_bi"),
+                new("trigger", "public.trg_asset_cleanup_requests"),
                 new("procedure", "public.sp_policy_upsert", "p_name text, p_low numeric, p_med numeric, p_high numeric, OUT p_id bigint"),
                 new("procedure", "public.sp_asset_upsert", "p_asset_code text, p_name text, p_type text, p_plant_code text, OUT p_id bigint"),
                 new("table", "public.assets_global"),
                 new("table", "public.risk_policies"),
                 new("table", "public.analytics_cr"),
-                new("table", "public.measurement_batches")
+                new("table", "public.measurement_batches"),
+                new("table", "public.asset_cleanup_requests")
             },
             DatabaseProfile.PlantAnpz or DatabaseProfile.PlantKrnpz => new List<DbObjectRequirement>
             {
                 new("function", "public.sp_insert_measurement_batch", "p_asset_code text, p_points jsonb, p_source_plant text"),
                 new("procedure", "public.sp_insert_measurement_batch_prc", "p_asset_code text, p_points jsonb, p_source_plant text, OUT p_inserted integer"),
                 new("function", "public.trg_measurements_ai_fn"),
+                new("function", "public.trg_assets_local_ad_fn"),
                 new("trigger", "public.trg_measurements_ai"),
+                new("trigger", "public.trg_assets_local_ad"),
                 new("table", "public.assets_local"),
                 new("table", "public.measurement_points"),
                 new("table", "public.measurements"),
                 new("table", "public.local_events"),
-                new("table", "central_ft.measurement_batches")
+                new("table", "central_ft.measurement_batches"),
+                new("table", "central_ft.asset_cleanup_requests")
             },
             _ => new List<DbObjectRequirement>()
         };
@@ -527,13 +533,29 @@ public sealed class DatabaseInventoryInspector
     {
         try
         {
-            var dir = new DirectoryInfo(AppContext.BaseDirectory);
-            while (dir != null)
+            var overridePath = Environment.GetEnvironmentVariable("OILERP__SQL_ROOT");
+            if (!string.IsNullOrWhiteSpace(overridePath))
             {
-                var candidate = Path.Combine(dir.FullName, "sql");
-                if (Directory.Exists(candidate))
-                    return candidate;
-                dir = dir.Parent;
+                var normalized = Path.GetFullPath(overridePath);
+                if (Directory.Exists(normalized)) return normalized;
+            }
+
+            var locations = new[]
+            {
+                AppContext.BaseDirectory,
+                Environment.CurrentDirectory
+            };
+
+            foreach (var location in locations)
+            {
+                var dir = new DirectoryInfo(location);
+                while (dir != null)
+                {
+                    var candidate = Path.Combine(dir.FullName, "sql");
+                    if (Directory.Exists(candidate))
+                        return candidate;
+                    dir = dir.Parent;
+                }
             }
         }
         catch

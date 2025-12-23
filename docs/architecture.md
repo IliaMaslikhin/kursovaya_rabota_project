@@ -1,37 +1,86 @@
-# Архитектура системы
+# Архитектура OilErp (максимально просто)
 
-## Общая картина
-- Центральная БД (PostgreSQL): справочник активов, политика риска, журнал батчей замеров, расчёты CR/риска, агрегации.
-- Заводы ANPZ/KRNPZ (PostgreSQL): локальные таблицы измерений и триггеры; батчи замеров пишутся напрямую в central через FDW (`central_ft.measurement_batches`).
-- .NET-ядро: `OilErp.Core` (контракты/DTO/сервисы), `OilErp.Infrastructure` (StorageAdapter, bootstrap/inventory, конфиг).
-- Клиентские поверхности: CLI/смоук-раннер (`OilErp.Tests.Runner`), Avalonia UI (`OilErp.Ui`).
-- Поток данных: заводская процедура → FDW вставка в `central.measurement_batches` → триггер central обновляет `analytics_cr`/`assets_global` → аналитические `fn_*`.
+## Что это за проект
+OilErp — учебная система про:
+- оборудование (активы);
+- замеры толщины (коррозия);
+- расчет скорости коррозии (**CR**) и уровня риска по политике.
 
-## Потоки данных
-1) **Сбор измерений на заводе**  
-   `sp_insert_measurement_batch_prc` (ANPZ/KRNPZ): валидирует точки (label/ts/thickness>0), пишет в локальные таблицы, публикует агрегированный батч (prev/last) в `central_ft.measurement_batches`.
+Главная идея: **заводы пишут замеры у себя**, а в **central** уходит «короткая выжимка», и central сам пересчитывает аналитику.
 
-2) **Central: батчи и аналитика**  
-   `measurement_batches` — журнал батчей замеров (вставка через FDW).  
-   Триггер `trg_measurement_batches_bi` гарантирует наличие записи в `assets_global` и обновляет `analytics_cr` (через `fn_calc_cr`).
+## Состав системы (что где живет)
+### Базы PostgreSQL
+- `central` — главная база:
+  - хранит общий справочник оборудования (`assets_global`);
+  - хранит политики риска (`risk_policies`);
+  - хранит журнал «батчей» замеров (`measurement_batches`);
+  - хранит витрину аналитики (`analytics_cr`).
+- `anpz`, `krnpz` — базы заводов:
+  - хранят локальные замеры (`measurements`) и точки (`measurement_points`);
+  - отправляют батчи в central через **FDW**.
 
-3) **Аналитика**  
-   - `fn_top_assets_by_cr` — топ по CR из `analytics_cr`.  
-   - `fn_asset_summary_json` — JSON сводка (asset + analytics + risk).  
-   - `fn_eval_risk` — уровень риска по политике.  
-   - `fn_plant_cr_stats` — mean/P90/count по заводу.
+### .NET проекты
+- `OilErp.Ui` — основной интерфейс (то, чем вы пользуетесь).
+- `OilErp.Core` — контракты, DTO и сервисы‑обертки над SQL.
+- `OilErp.Infrastructure` — реальная работа с PostgreSQL (Npgsql), bootstrap и проверка схемы.
+- `OilErp.Tests.Runner` — смоук‑проверки (UI запускает их перед стартом).
 
-4) **Политики/активы**  
-   `fn/sp_asset_upsert`, `fn/sp_policy_upsert` — поддержка справочников; функции делегируют в процедуры с OUT id.
+## Слова, которые будут встречаться
+- **Ingest (ингест)** — «принять данные и провести по цепочке до результата». У нас ingest = путь *от замера на заводе → до записи в central → до обновления `analytics_cr`*.
+- **FDW** — “foreign data wrapper”: на заводе есть «внешняя таблица», которая на самом деле лежит в central.
+- **Триггер** — автоматическая логика, которая срабатывает при вставке строки.
 
-## Компоненты
-- **Core**: `IStoragePort`, `IStorageTransaction` (сейвпоинты), DTO для топ/риск/plant stats, сервисы-обёртки над SQL, нормализация ввода в `AppServiceBase`.
-- **Infrastructure**: `StorageAdapter` (Npgsql, кэш pg_proc метаданных), `StorageConfigProvider`, общий `AppLogger`/`DatabaseBootstrapper`/`DatabaseInventoryInspector`.
-- **Tests/CLI**: смоук-сценарии для подключения, аналитики и FDW; CLI команды `add-asset/policy`, `add-measurements-anpz` (JSON/CSV), `summary/top-by-cr/eval-risk/plant-cr`.
-- **UI**: Avalonia, `KernelGateway` использует общий bootstrapper/config, `MeasurementDataProvider` асинхронный, панели Analytics/Measurements используют те же сервисы.
+## Как работает ingest (самое важное)
+Опишу прямо шагами, без красивостей.
 
-## Применяемые паттерны
-- Порт/адаптер (StoragePort ↔ StorageAdapter).
-- FDW + прямые вставки + триггер в central для межбазового обмена.
-- MVVM в UI, DTO-first в Core.
-- Идемпотентные SQL-скрипты (OR REPLACE/IF NOT EXISTS).
+### Шаг 1. На заводе кто‑то добавляет замер
+Источник может быть UI или любая другая программа. Суть: вызывается заводская функция:
+- `public.sp_insert_measurement_batch(p_asset_code, p_points, p_source_plant)`
+
+Она делает простые вещи:
+- проверяет, что `asset_code` не пустой;
+- проверяет, что `p_points` — это JSON‑массив точек;
+- чистит и нормализует точки (label/ts/thickness/note), выбрасывает некорректные;
+- сортирует точки по времени;
+- вызывает процедуру `public.sp_insert_measurement_batch_prc(...)`.
+
+### Шаг 2. Завод записывает замер у себя
+Процедура `public.sp_insert_measurement_batch_prc` на заводе:
+- создает/находит актив в `assets_local`;
+- создает/находит точки в `measurement_points`;
+- вставляет строки в `measurements`;
+- следит за правилами (время должно идти вперед, толщина не должна расти).
+
+### Шаг 3. Завод отправляет «батч» в central через FDW
+После локальной записи завод собирает **батч** — это не все точки, а только:
+- `prev_*` — предыдущий замер;
+- `last_*` — последний замер.
+
+И вставляет одну строку в `central_ft.measurement_batches`.
+`central_ft` — это FDW‑схема на заводе, а сама таблица физически лежит в `central.public.measurement_batches`.
+
+Почему так: central не обязан знать все сырые точки, ему достаточно prev/last для расчета CR.
+
+### Шаг 4. Central сам обновляет аналитику триггером
+В `central.public.measurement_batches` стоит триггер `trg_measurement_batches_bi`.
+Он срабатывает на каждую вставку батча и делает два действия:
+1) гарантирует наличие актива в `assets_global` (иначе внешние ключи мешали бы);
+2) делает upsert в `analytics_cr` и считает CR через `fn_calc_cr`.
+
+Результат: **батч попал в central → `analytics_cr` обновилась автоматически**.
+
+## Где UI берет данные
+Упрощенно:
+- список оборудования — из `assets_global` (и частично из батчей, если актив пришел только с завода);
+- аналитика CR — из `analytics_cr`;
+- риск — считается по порогам `risk_policies` (UI может показать риск по выбранной политике).
+
+## «Кто за что отвечает» в коде (коротко)
+- Подключение/проверка БД: `KernelGateway` → `DatabaseBootstrapper` → `DatabaseInventoryInspector`.
+- Доступ к SQL из кода: `IStoragePort` (контракт) → `StorageAdapter` (реализация на Npgsql).
+- Запись замера на завод: `PlantMeasurementsTabViewModel` → `SpInsertMeasurementBatchService` → SQL на заводе → FDW → триггер в central.
+
+## Важные практические детали (почему иногда “не работает”)
+- Внешняя таблица `central_ft.measurement_batches` **не должна** включать `id/created_at`, иначе `postgres_fdw` может отправить `NULL` и insert сломается.
+- В заводской функции разбор JSON должен быть через `x.value->>'field'` (иначе бывают ошибки типа `record ->> unknown`).
+- В UI “KRNPZ” приводится к “KNPZ” (это нормально, так сделана нормализация названия).

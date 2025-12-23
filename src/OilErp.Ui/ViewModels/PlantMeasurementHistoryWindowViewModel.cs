@@ -36,6 +36,13 @@ public sealed partial class PlantMeasurementHistoryWindowViewModel : ObservableO
 
     public string PlantCode => plantCode;
 
+    public string PlantCodeDisplay => plantCode switch
+    {
+        "ANPZ" => "АНПЗ",
+        "KNPZ" or "KRNPZ" => "КНПЗ",
+        _ => plantCode
+    };
+
     public string AssetCode => assetCode;
 
     public ObservableCollection<PlantMeasurementHistoryItemViewModel> Items { get; }
@@ -220,9 +227,9 @@ public sealed partial class PlantMeasurementHistoryWindowViewModel : ObservableO
         var confirmVm = new ConfirmDialogViewModel(
             "Удалить замер",
             $"Удалить замер?\n\n" +
-            $"ts: {item.TimestampUtc:O}\n" +
-            $"label: {item.Label}\n" +
-            $"thickness: {item.Thickness:0.###}",
+            $"дата: {item.TimestampUtc:O}\n" +
+            $"метка: {item.Label}\n" +
+            $"толщина: {item.Thickness:0.###}",
             confirmText: "Удалить",
             cancelText: "Отмена");
 
@@ -267,7 +274,7 @@ public sealed partial class PlantMeasurementHistoryWindowViewModel : ObservableO
             var csv = BuildCsv(Items);
             var ok = await UiFilePicker.SaveTextAsync(
                 "Экспорт CSV",
-                $"{assetCode}_{plantCode}_measurements.csv",
+                $"{assetCode}_{plantCode}_замеры.csv",
                 csv,
                 UiFilePicker.CsvFileType);
 
@@ -294,7 +301,7 @@ public sealed partial class PlantMeasurementHistoryWindowViewModel : ObservableO
             var json = BuildJson(Items);
             var ok = await UiFilePicker.SaveTextAsync(
                 "Экспорт JSON",
-                $"{assetCode}_{plantCode}_measurements.json",
+                $"{assetCode}_{plantCode}_замеры.json",
                 json,
                 UiFilePicker.JsonFileType);
 
@@ -319,10 +326,10 @@ public sealed partial class PlantMeasurementHistoryWindowViewModel : ObservableO
             StatusMessage = "Готовим XLSX...";
 
             var (headers, rows) = BuildTable(Items);
-            var bytes = SimpleXlsxWriter.Build("Measurements", headers, rows);
+            var bytes = SimpleXlsxWriter.Build("Замеры", headers, rows);
             var ok = await UiFilePicker.SaveBytesAsync(
                 "Экспорт Excel (.xlsx)",
-                $"{assetCode}_{plantCode}_measurements.xlsx",
+                $"{assetCode}_{plantCode}_замеры.xlsx",
                 bytes,
                 UiFilePicker.XlsxFileType);
 
@@ -457,7 +464,7 @@ public sealed partial class PlantMeasurementHistoryWindowViewModel : ObservableO
 
         if (lastDate is null || lastThk is null)
         {
-            StatusMessage = "Локально обновлено, но отправлять в central нечего (нет замеров).";
+            StatusMessage = "Локально обновлено, но отправлять в центральную базу нечего (нет замеров).";
             return;
         }
 
@@ -749,7 +756,7 @@ public sealed partial class PlantMeasurementHistoryWindowViewModel : ObservableO
             new MeasurementSortOption("ts_asc", "Дата (старые)", "m.ts asc, m.id asc"),
             new MeasurementSortOption("thk_desc", "Толщина (убывание)", "m.thickness desc, m.ts desc, m.id desc"),
             new MeasurementSortOption("thk_asc", "Толщина (возрастание)", "m.thickness asc, m.ts desc, m.id desc"),
-            new MeasurementSortOption("label", "Label", "mp.label asc, m.ts desc, m.id desc")
+            new MeasurementSortOption("label", "Метка", "mp.label asc, m.ts desc, m.id desc")
         };
 }
 

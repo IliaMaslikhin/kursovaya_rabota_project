@@ -23,7 +23,7 @@ namespace OilErp.Ui.ViewModels;
 
 public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
 {
-    private const int MaxColumns = 12;
+    private const int MaxColumns = 36;
     private static readonly EquipmentSortOption[] EquipmentSortOptionsSource =
     {
         new EquipmentSortOption("created_desc", "Создано (новые)", "created_at desc, asset_code"),
@@ -42,12 +42,18 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
         new EquipmentGroupOption("last_day", "Группировать: дата (последний замер)"),
         new EquipmentGroupOption("code_prefix", "Группировать: код (префикс)")
     };
+    private static readonly ColumnSortOption[] ColumnSortOptionsSource =
+    {
+        new ColumnSortOption("date_asc", "Даты: старые → новые", false),
+        new ColumnSortOption("date_desc", "Даты: новые → старые", true)
+    };
 
     private readonly DatabaseProfile profile;
     private readonly IStoragePort storage;
     private readonly string connectionString;
     private readonly DispatcherTimer filterDebounceTimer;
     private bool filterRefreshPending;
+    private List<(DateTimeOffset Date, string Label)> columnKeys = new();
 
     public PlantMeasurementsTabViewModel(DatabaseProfile profile, IStoragePort storage, string connectionString)
     {
@@ -60,6 +66,7 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
 
         PlantCode = profile == DatabaseProfile.PlantKrnpz ? "KNPZ" : "ANPZ";
         Columns = new ObservableCollection<PlantMeasurementColumnViewModel>();
+        ColumnGroups = new ObservableCollection<MeasurementDateGroupHeaderViewModel>();
         Rows = new ObservableCollection<PlantMeasurementEquipmentRowViewModel>();
         DisplayRows = new ObservableCollection<object>();
         statusMessage = "Нажмите «Обновить» для загрузки таблицы.";
@@ -67,6 +74,8 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
         selectedEquipmentSort = EquipmentSortOptions[0];
         EquipmentGroupOptions = EquipmentGroupOptionsSource;
         selectedEquipmentGroup = EquipmentGroupOptions[0];
+        ColumnSortOptions = ColumnSortOptionsSource;
+        selectedColumnSort = ColumnSortOptions[0];
 
         filterDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
         filterDebounceTimer.Tick += async (_, _) =>
@@ -80,7 +89,16 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
 
     public string PlantCode { get; }
 
+    public string PlantCodeDisplay => PlantCode switch
+    {
+        "ANPZ" => "АНПЗ",
+        "KNPZ" => "КНПЗ",
+        _ => PlantCode
+    };
+
     public ObservableCollection<PlantMeasurementColumnViewModel> Columns { get; }
+
+    public ObservableCollection<MeasurementDateGroupHeaderViewModel> ColumnGroups { get; }
 
     public ObservableCollection<PlantMeasurementEquipmentRowViewModel> Rows { get; }
 
@@ -89,6 +107,8 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
     public IReadOnlyList<EquipmentSortOption> EquipmentSortOptions { get; }
 
     public IReadOnlyList<EquipmentGroupOption> EquipmentGroupOptions { get; }
+
+    public IReadOnlyList<ColumnSortOption> ColumnSortOptions { get; }
 
     [ObservableProperty] private object? selectedDisplayRow;
 
@@ -113,6 +133,8 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
 
     [ObservableProperty] private EquipmentGroupOption selectedEquipmentGroup;
 
+    [ObservableProperty] private ColumnSortOption selectedColumnSort;
+
     [ObservableProperty] private bool isBusy;
 
     [ObservableProperty] private string statusMessage;
@@ -125,6 +147,11 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
     partial void OnSelectedEquipmentGroupChanged(EquipmentGroupOption value)
     {
         RebuildDisplayRows();
+    }
+
+    partial void OnSelectedColumnSortChanged(ColumnSortOption value)
+    {
+        ApplyColumnOrder();
     }
 
     partial void OnIsBusyChanged(bool value)
@@ -165,15 +192,11 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
             SelectedRow = null;
             Rows.Clear();
             Columns.Clear();
+            ColumnGroups.Clear();
             DisplayRows.Clear();
 
             var rowsByCode = await LoadEquipmentAsync();
             await LoadMeasurementsAsync(rowsByCode);
-
-            foreach (var row in Rows)
-            {
-                row.RebuildCells(Columns);
-            }
 
             RebuildDisplayRows();
             StatusMessage = $"Оборудование: {Rows.Count}, столбцов замеров: {Columns.Count}.";
@@ -255,7 +278,7 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
                 }
             }
 
-            ApplyMeasurementToMatrix(selected, new DateTimeOffset(timestampUtc), (decimal)Math.Round(result.Thickness, 3));
+            ApplyMeasurementToMatrix(selected, new DateTimeOffset(timestampUtc), result.Label, (decimal)Math.Round(result.Thickness, 3));
             RebuildDisplayRows();
             StatusMessage = $"Сохранено (строк={inserted}).";
         }
@@ -368,9 +391,9 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
             var confirmVm = new ConfirmDialogViewModel(
                 "Удалить замер",
                 $"Удалить последний замер для {assetCode}?\n\n" +
-                $"label: {latest.Label}\n" +
-                $"ts: {latest.TimestampUtc:O}\n" +
-                $"thickness: {latest.Thickness:0.###}",
+                $"метка: {latest.Label}\n" +
+                $"дата: {latest.TimestampUtc:O}\n" +
+                $"толщина: {latest.Thickness:0.###}",
                 confirmText: "Удалить",
                 cancelText: "Отмена");
 
@@ -454,8 +477,7 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
         {
             var code = reader.GetString(0);
             var location = reader.IsDBNull(1) ? null : reader.GetString(1);
-            var status = reader.IsDBNull(2) ? null : reader.GetString(2);
-            if (string.IsNullOrWhiteSpace(status)) status = "OK";
+            var status = NormalizeStatus(reader.IsDBNull(2) ? null : reader.GetString(2));
 
             DateTimeOffset? createdAt = null;
             if (!reader.IsDBNull(3))
@@ -485,15 +507,15 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
     {
         if (rowsByCode.Count == 0) return;
 
-        var columns = new List<DateTimeOffset>(MaxColumns);
-        var columnsSet = new HashSet<DateTimeOffset>();
+        var columns = new List<(DateTimeOffset Date, string Label)>(MaxColumns);
+        var columnsSet = new HashSet<(DateTimeOffset Date, string Label)>();
 
         await using var conn = new NpgsqlConnection(connectionString);
         await conn.OpenAsync();
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            select a.asset_code, m.ts, m.thickness
+            select a.asset_code, m.ts, m.thickness, mp.label
             from public.measurements m
             join public.measurement_points mp on mp.id = m.point_id
             join public.assets_local a on a.id = mp.asset_id
@@ -511,33 +533,33 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
             if (tsValue.Kind == DateTimeKind.Unspecified) tsValue = DateTime.SpecifyKind(tsValue, DateTimeKind.Utc);
             var ts = NormalizeToLocalDay(new DateTimeOffset(tsValue));
             var thk = reader.GetFieldValue<decimal>(2);
+            var label = NormalizeLabel(reader.IsDBNull(3) ? null : reader.GetString(3));
 
-            if (!columnsSet.Contains(ts))
+            var key = (ts, label);
+            if (!columnsSet.Contains(key))
             {
                 if (columns.Count >= MaxColumns)
                 {
                     continue;
                 }
 
-                columns.Add(ts);
-                columnsSet.Add(ts);
+                columns.Add(key);
+                columnsSet.Add(key);
             }
 
-            row.TryAddValue(ts, thk);
+            row.TryAddValue(ts, label, thk);
         }
 
-        Columns.Clear();
-        foreach (var ts in columns)
-        {
-            Columns.Add(new PlantMeasurementColumnViewModel(ts, FormatColumn(ts)));
-        }
+        columnKeys = columns;
+        ApplyColumnOrder();
     }
 
-    private void ApplyMeasurementToMatrix(PlantMeasurementEquipmentRowViewModel row, DateTimeOffset ts, decimal thickness)
+    private void ApplyMeasurementToMatrix(PlantMeasurementEquipmentRowViewModel row, DateTimeOffset ts, string label, decimal thickness)
     {
         var normalized = NormalizeToLocalDay(ts);
-        EnsureColumn(normalized);
-        row.TryAddValue(normalized, thickness);
+        var normalizedLabel = NormalizeLabel(label);
+        EnsureColumn(normalized, normalizedLabel);
+        row.TryAddValue(normalized, normalizedLabel, thickness);
 
         foreach (var r in Rows)
         {
@@ -694,29 +716,77 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
         return value.Length > 2 ? value[..2] : value;
     }
 
-    private void EnsureColumn(DateTimeOffset ts)
+    private void EnsureColumn(DateTimeOffset ts, string label)
     {
         ts = NormalizeToLocalDay(ts);
-        if (Columns.Any(c => c.Timestamp == ts)) return;
+        var key = (ts, label);
+        if (columnKeys.Contains(key)) return;
 
-        var insertIndex = 0;
-        while (insertIndex < Columns.Count && Columns[insertIndex].Timestamp > ts)
+        columnKeys.Add(key);
+        if (columnKeys.Count > MaxColumns)
         {
-            insertIndex++;
+            var oldest = columnKeys
+                .OrderBy(k => k.Date)
+                .ThenBy(k => GetLabelOrder(k.Label))
+                .ThenBy(k => k.Label, StringComparer.OrdinalIgnoreCase)
+                .First();
+            columnKeys.Remove(oldest);
         }
 
-        Columns.Insert(insertIndex, new PlantMeasurementColumnViewModel(ts, FormatColumn(ts)));
-
-        while (Columns.Count > MaxColumns)
-        {
-            Columns.RemoveAt(Columns.Count - 1);
-        }
+        ApplyColumnOrder();
     }
 
-    private static string FormatColumn(DateTimeOffset ts)
+    private void ApplyColumnOrder()
     {
-        var local = ts.ToLocalTime();
-        return local.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
+        Columns.Clear();
+        ColumnGroups.Clear();
+        if (columnKeys.Count == 0) return;
+
+        var grouped = columnKeys
+            .GroupBy(k => k.Date)
+            .Select(g => new
+            {
+                Date = g.Key,
+                Labels = g.Select(x => x.Label).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+            })
+            .ToList();
+
+        var orderedDates = SelectedColumnSort.Descending
+            ? grouped.OrderByDescending(g => g.Date)
+            : grouped.OrderBy(g => g.Date);
+
+        var totalColumns = 0;
+        foreach (var group in orderedDates)
+        {
+            var labels = group.Labels
+                .OrderBy(GetLabelOrder)
+                .ThenBy(l => l, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (totalColumns + labels.Count > MaxColumns)
+            {
+                labels = labels.Take(Math.Max(0, MaxColumns - totalColumns)).ToList();
+            }
+
+            if (labels.Count == 0) continue;
+
+            ColumnGroups.Add(new MeasurementDateGroupHeaderViewModel(
+                group.Date.ToLocalTime().ToString("dd.MM.yyyy", CultureInfo.InvariantCulture),
+                labels.Count));
+
+            foreach (var label in labels)
+            {
+                Columns.Add(new PlantMeasurementColumnViewModel(group.Date, label, label));
+            }
+
+            totalColumns += labels.Count;
+            if (totalColumns >= MaxColumns) break;
+        }
+
+        foreach (var row in Rows)
+        {
+            row.RebuildCells(Columns);
+        }
     }
 
     private static DateTimeOffset NormalizeToLocalDay(DateTimeOffset ts)
@@ -806,6 +876,32 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
         return $"T{next}";
     }
 
+    private static string NormalizeStatus(string? value)
+    {
+        var trimmed = string.IsNullOrWhiteSpace(value) ? "Норма" : value.Trim();
+        return trimmed.ToUpperInvariant() switch
+        {
+            "OK" => "Норма",
+            "WARNING" => "Предупреждение",
+            "CRITICAL" => "Критично",
+            "UNKNOWN" => "Неизвестно",
+            _ => trimmed
+        };
+    }
+
+    private static string NormalizeLabel(string? label)
+    {
+        var trimmed = string.IsNullOrWhiteSpace(label) ? "—" : label.Trim();
+        return trimmed.ToUpperInvariant();
+    }
+
+    private static int GetLabelOrder(string label)
+    {
+        if (string.IsNullOrWhiteSpace(label) || label == "—") return int.MaxValue;
+        var match = LabelRegex.Match(label.Trim());
+        return match.Success && int.TryParse(match.Groups["n"].Value, out var num) ? num : int.MaxValue;
+    }
+
     private static async Task UpdateMeasurementAsync(NpgsqlConnection conn, NpgsqlTransaction tx, long id, double thickness, string? note)
     {
         var thicknessValue = Math.Round((decimal)thickness, 3, MidpointRounding.AwayFromZero);
@@ -869,7 +965,7 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
 
         if (lastDate is null || lastThk is null)
         {
-            StatusMessage = "Замеры обновлены локально, но для central нечего отправлять (нет замеров).";
+            StatusMessage = "Замеры обновлены локально, но для центральной базы нечего отправлять (нет замеров).";
             return;
         }
 
@@ -891,7 +987,7 @@ public sealed partial class PlantMeasurementsTabViewModel : ObservableObject
     }
 }
 
-public sealed record PlantMeasurementColumnViewModel(DateTimeOffset Timestamp, string Header);
+public sealed record PlantMeasurementColumnViewModel(DateTimeOffset Date, string Label, string Header);
 
 public sealed record EquipmentSortOption(string Code, string Title, string OrderBySql)
 {
@@ -910,7 +1006,7 @@ public sealed record PlantMeasurementsGroupHeaderViewModel(string Title, int Cou
 
 public sealed partial class PlantMeasurementEquipmentRowViewModel : ObservableObject
 {
-    private readonly Dictionary<DateTimeOffset, decimal> valuesByTimestamp = new();
+    private readonly Dictionary<(DateTimeOffset Date, string Label), decimal> valuesByKey = new();
 
     public PlantMeasurementEquipmentRowViewModel(string code, string? location, string? status, DateTimeOffset? createdAt, DateTimeOffset? lastMeasurementUtc)
     {
@@ -934,11 +1030,12 @@ public sealed partial class PlantMeasurementEquipmentRowViewModel : ObservableOb
 
     public ObservableCollection<string> Cells { get; }
 
-    public void TryAddValue(DateTimeOffset ts, decimal thickness)
+    public void TryAddValue(DateTimeOffset ts, string label, decimal thickness)
     {
-        if (!valuesByTimestamp.ContainsKey(ts))
+        var key = (ts, label);
+        if (!valuesByKey.ContainsKey(key))
         {
-            valuesByTimestamp[ts] = thickness;
+            valuesByKey[key] = thickness;
         }
 
         if (LastMeasurementUtc is null || ts > LastMeasurementUtc.Value)
@@ -952,7 +1049,8 @@ public sealed partial class PlantMeasurementEquipmentRowViewModel : ObservableOb
         Cells.Clear();
         foreach (var col in columns)
         {
-            if (valuesByTimestamp.TryGetValue(col.Timestamp, out var thk))
+            var key = (col.Date, col.Label);
+            if (valuesByKey.TryGetValue(key, out var thk))
             {
                 Cells.Add(thk.ToString("0.###", CultureInfo.InvariantCulture));
             }

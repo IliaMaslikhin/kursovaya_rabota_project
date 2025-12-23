@@ -23,8 +23,8 @@ public sealed partial class CentralMeasurementsTransferWindowViewModel : Observa
     public CentralMeasurementsTransferWindowViewModel(string connectionString)
     {
         this.connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
-        title = "Импорт / Экспорт замеров — CENTRAL";
-        statusMessage = "Экспорт/импорт выполняется по всем заводам (ANPZ/KNPZ/...).";
+        title = "Импорт / Экспорт замеров — ЦЕНТРАЛЬНАЯ";
+        statusMessage = "Экспорт/импорт выполняется по всем заводам (АНПЗ/КНПЗ/...).";
     }
 
     [ObservableProperty] private bool isBusy;
@@ -46,8 +46,8 @@ public sealed partial class CentralMeasurementsTransferWindowViewModel : Observa
             var rows = await LoadAllAsync();
             var csv = BuildCsv(rows);
             var ok = await UiFilePicker.SaveTextAsync(
-                "Экспорт CSV (CENTRAL)",
-                $"central_measurements_{DateTime.Now:yyyyMMdd_HHmm}.csv",
+                "Экспорт CSV (ЦЕНТРАЛЬНАЯ)",
+                $"центральная_замеры_{DateTime.Now:yyyyMMdd_HHmm}.csv",
                 csv,
                 UiFilePicker.CsvFileType);
 
@@ -74,8 +74,8 @@ public sealed partial class CentralMeasurementsTransferWindowViewModel : Observa
             var rows = await LoadAllAsync();
             var json = BuildJson(rows);
             var ok = await UiFilePicker.SaveTextAsync(
-                "Экспорт JSON (CENTRAL)",
-                $"central_measurements_{DateTime.Now:yyyyMMdd_HHmm}.json",
+                "Экспорт JSON (ЦЕНТРАЛЬНАЯ)",
+                $"центральная_замеры_{DateTime.Now:yyyyMMdd_HHmm}.json",
                 json,
                 UiFilePicker.JsonFileType);
 
@@ -101,10 +101,10 @@ public sealed partial class CentralMeasurementsTransferWindowViewModel : Observa
 
             var rows = await LoadAllAsync();
             var (headers, tableRows) = BuildTable(rows);
-            var bytes = SimpleXlsxWriter.Build("Measurements", headers, tableRows);
+            var bytes = SimpleXlsxWriter.Build("Замеры", headers, tableRows);
             var ok = await UiFilePicker.SaveBytesAsync(
-                "Экспорт Excel (.xlsx) (CENTRAL)",
-                $"central_measurements_{DateTime.Now:yyyyMMdd_HHmm}.xlsx",
+                "Экспорт Excel (.xlsx) (ЦЕНТРАЛЬНАЯ)",
+                $"центральная_замеры_{DateTime.Now:yyyyMMdd_HHmm}.xlsx",
                 bytes,
                 UiFilePicker.XlsxFileType);
 
@@ -128,7 +128,7 @@ public sealed partial class CentralMeasurementsTransferWindowViewModel : Observa
             IsBusy = true;
             StatusMessage = "Открываем CSV...";
 
-            var (_, content) = await UiFilePicker.OpenTextAsync("Импорт CSV (CENTRAL)", UiFilePicker.CsvFileType);
+            var (_, content) = await UiFilePicker.OpenTextAsync("Импорт CSV (ЦЕНТРАЛЬНАЯ)", UiFilePicker.CsvFileType);
             if (string.IsNullOrWhiteSpace(content))
             {
                 StatusMessage = "Импорт отменён.";
@@ -158,7 +158,7 @@ public sealed partial class CentralMeasurementsTransferWindowViewModel : Observa
             IsBusy = true;
             StatusMessage = "Открываем JSON...";
 
-            var (_, content) = await UiFilePicker.OpenTextAsync("Импорт JSON (CENTRAL)", UiFilePicker.JsonFileType);
+            var (_, content) = await UiFilePicker.OpenTextAsync("Импорт JSON (ЦЕНТРАЛЬНАЯ)", UiFilePicker.JsonFileType);
             if (string.IsNullOrWhiteSpace(content))
             {
                 StatusMessage = "Импорт отменён.";
@@ -592,7 +592,12 @@ public sealed partial class CentralMeasurementsTransferWindowViewModel : Observa
     {
         if (string.IsNullOrWhiteSpace(plant)) return DefaultPlantCode;
         var upper = plant.Trim().ToUpperInvariant();
-        return upper == "KRNPZ" ? "KNPZ" : upper;
+        return upper switch
+        {
+            "KRNPZ" or "KNPZ" => "КНПЗ",
+            "ANPZ" => "АНПЗ",
+            "CENTRAL" => "Центральная",
+            _ => upper
+        };
     }
 }
-

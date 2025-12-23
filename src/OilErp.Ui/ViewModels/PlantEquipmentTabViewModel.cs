@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -15,7 +17,23 @@ namespace OilErp.Ui.ViewModels;
 public sealed partial class PlantEquipmentTabViewModel : ObservableObject
 {
     private readonly string connectionString;
-    private static readonly string[] StatusOptions = { "OK", "Warning", "Critical", "Unknown" };
+    private static readonly EquipmentSortOption[] EquipmentSortOptionsSource =
+    {
+        new EquipmentSortOption("created_desc", "Создано (новые)", "created_at desc"),
+        new EquipmentSortOption("created_asc", "Создано (старые)", "created_at asc"),
+        new EquipmentSortOption("code", "Код (A→Z)", "asset_code"),
+        new EquipmentSortOption("location", "Локация (A→Z)", "location"),
+        new EquipmentSortOption("status", "Статус (A→Z)", "status")
+    };
+    private static readonly EquipmentGroupOption[] EquipmentGroupOptionsSource =
+    {
+        new EquipmentGroupOption("none", "Без группировки"),
+        new EquipmentGroupOption("status", "Группировать: статус"),
+        new EquipmentGroupOption("location", "Группировать: локация"),
+        new EquipmentGroupOption("created_day", "Группировать: дата создания"),
+        new EquipmentGroupOption("code_prefix", "Группировать: код (префикс)")
+    };
+    private static readonly string[] StatusOptions = { "Норма", "Предупреждение", "Критично", "Неизвестно" };
     private readonly DispatcherTimer filterDebounceTimer;
     private bool filterRefreshPending;
 
@@ -23,7 +41,12 @@ public sealed partial class PlantEquipmentTabViewModel : ObservableObject
     {
         this.connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
         Items = new ObservableCollection<PlantEquipmentItemViewModel>();
+        DisplayItems = new ObservableCollection<object>();
         statusMessage = "Загрузите список оборудования.";
+        EquipmentSortOptions = EquipmentSortOptionsSource;
+        selectedEquipmentSort = EquipmentSortOptions[0];
+        EquipmentGroupOptions = EquipmentGroupOptionsSource;
+        selectedEquipmentGroup = EquipmentGroupOptions[0];
 
         filterDebounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
         filterDebounceTimer.Tick += async (_, _) =>
@@ -37,12 +60,29 @@ public sealed partial class PlantEquipmentTabViewModel : ObservableObject
 
     public ObservableCollection<PlantEquipmentItemViewModel> Items { get; }
 
+    public ObservableCollection<object> DisplayItems { get; }
+
+    public IReadOnlyList<EquipmentSortOption> EquipmentSortOptions { get; }
+
+    public IReadOnlyList<EquipmentGroupOption> EquipmentGroupOptions { get; }
+
+    [ObservableProperty] private object? selectedDisplayItem;
+
     [ObservableProperty] private PlantEquipmentItemViewModel? selectedItem;
 
     [ObservableProperty] private string filterText = string.Empty;
 
+    [ObservableProperty] private EquipmentSortOption selectedEquipmentSort;
+
+    [ObservableProperty] private EquipmentGroupOption selectedEquipmentGroup;
+
     [ObservableProperty] private bool isBusy;
     [ObservableProperty] private string statusMessage;
+
+    partial void OnSelectedDisplayItemChanged(object? value)
+    {
+        SelectedItem = value as PlantEquipmentItemViewModel;
+    }
 
     partial void OnIsBusyChanged(bool value)
     {
@@ -79,6 +119,16 @@ public sealed partial class PlantEquipmentTabViewModel : ObservableObject
         filterDebounceTimer.Start();
     }
 
+    partial void OnSelectedEquipmentSortChanged(EquipmentSortOption value)
+    {
+        RebuildDisplayItems();
+    }
+
+    partial void OnSelectedEquipmentGroupChanged(EquipmentGroupOption value)
+    {
+        RebuildDisplayItems();
+    }
+
     private bool CanOpenDialog() => !IsBusy;
 
     private bool CanEditSelected()
@@ -100,7 +150,10 @@ public sealed partial class PlantEquipmentTabViewModel : ObservableObject
         {
             IsBusy = true;
             StatusMessage = "Загрузка оборудования...";
+            SelectedDisplayItem = null;
+            SelectedItem = null;
             Items.Clear();
+            DisplayItems.Clear();
 
             await using var conn = new NpgsqlConnection(connectionString);
             await conn.OpenAsync();
@@ -129,9 +182,10 @@ public sealed partial class PlantEquipmentTabViewModel : ObservableObject
                     if (dt.Kind == DateTimeKind.Unspecified) dt = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
                     createdAt = new DateTimeOffset(dt);
                 }
-                Items.Add(new PlantEquipmentItemViewModel(code, locationValue, statusValue, createdAt));
+                Items.Add(new PlantEquipmentItemViewModel(code, locationValue, NormalizeStatus(statusValue), createdAt));
             }
 
+            RebuildDisplayItems();
             StatusMessage = $"Загружено: {Items.Count}";
         }
         catch (Exception ex)
@@ -165,7 +219,7 @@ public sealed partial class PlantEquipmentTabViewModel : ObservableObject
                 "Локация",
                 null,
                 "Статус",
-                "OK",
+                "Норма",
                 field2Options: StatusOptions);
 
             var dialog = new EquipmentEditWindow { DataContext = vm };
@@ -261,7 +315,7 @@ public sealed partial class PlantEquipmentTabViewModel : ObservableObject
             return;
         }
 
-        var normalizedStatus = string.IsNullOrWhiteSpace(status) ? "OK" : status.Trim();
+        var normalizedStatus = NormalizeStatus(status);
 
         try
         {
@@ -305,6 +359,140 @@ public sealed partial class PlantEquipmentTabViewModel : ObservableObject
             EditCommand.NotifyCanExecuteChanged();
             DeleteCommand.NotifyCanExecuteChanged();
         }
+    }
+
+    private static string NormalizeStatus(string? value)
+    {
+        var trimmed = string.IsNullOrWhiteSpace(value) ? "Норма" : value.Trim();
+        return trimmed.ToUpperInvariant() switch
+        {
+            "OK" => "Норма",
+            "WARNING" => "Предупреждение",
+            "CRITICAL" => "Критично",
+            "UNKNOWN" => "Неизвестно",
+            _ => trimmed
+        };
+    }
+
+    private void RebuildDisplayItems()
+    {
+        DisplayItems.Clear();
+        if (Items.Count == 0) return;
+
+        var ordered = GetSortedItems();
+        if (string.Equals(SelectedEquipmentGroup.Code, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var item in ordered)
+            {
+                DisplayItems.Add(item);
+            }
+
+            return;
+        }
+
+        if (string.Equals(SelectedEquipmentGroup.Code, "status", StringComparison.OrdinalIgnoreCase))
+        {
+            var groups = ordered
+                .GroupBy(i => string.IsNullOrWhiteSpace(i.Status) ? "—" : i.Status.Trim(), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var g in groups)
+            {
+                DisplayItems.Add(new EquipmentGroupHeaderViewModel($"Статус: {g.Key}", g.Count()));
+                foreach (var item in g)
+                {
+                    DisplayItems.Add(item);
+                }
+            }
+
+            return;
+        }
+
+        if (string.Equals(SelectedEquipmentGroup.Code, "location", StringComparison.OrdinalIgnoreCase))
+        {
+            var groups = ordered
+                .GroupBy(i => string.IsNullOrWhiteSpace(i.Location) ? "—" : i.Location.Trim(), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var g in groups)
+            {
+                DisplayItems.Add(new EquipmentGroupHeaderViewModel($"Локация: {g.Key}", g.Count()));
+                foreach (var item in g)
+                {
+                    DisplayItems.Add(item);
+                }
+            }
+
+            return;
+        }
+
+        if (string.Equals(SelectedEquipmentGroup.Code, "created_day", StringComparison.OrdinalIgnoreCase))
+        {
+            var groups = ordered
+                .GroupBy(i => i.CreatedAt?.ToLocalTime().Date)
+                .OrderByDescending(g => g.Key ?? DateTime.MinValue);
+
+            foreach (var g in groups)
+            {
+                var title = g.Key.HasValue ? g.Key.Value.ToString("dd.MM.yyyy") : "—";
+                DisplayItems.Add(new EquipmentGroupHeaderViewModel($"Дата: {title}", g.Count()));
+                foreach (var item in g)
+                {
+                    DisplayItems.Add(item);
+                }
+            }
+
+            return;
+        }
+
+        if (string.Equals(SelectedEquipmentGroup.Code, "code_prefix", StringComparison.OrdinalIgnoreCase))
+        {
+            var groups = ordered
+                .GroupBy(i => GetCodePrefix(i.Code), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var g in groups)
+            {
+                DisplayItems.Add(new EquipmentGroupHeaderViewModel($"Префикс: {g.Key}", g.Count()));
+                foreach (var item in g)
+                {
+                    DisplayItems.Add(item);
+                }
+            }
+        }
+    }
+
+    private IReadOnlyList<PlantEquipmentItemViewModel> GetSortedItems()
+    {
+        var comparer = StringComparer.OrdinalIgnoreCase;
+        return SelectedEquipmentSort.Code switch
+        {
+            "created_asc" => Items
+                .OrderBy(i => i.CreatedAt ?? DateTimeOffset.MinValue)
+                .ThenBy(i => i.Code, comparer)
+                .ToList(),
+            "code" => Items.OrderBy(i => i.Code, comparer).ToList(),
+            "location" => Items
+                .OrderBy(i => i.Location ?? string.Empty, comparer)
+                .ThenBy(i => i.Code, comparer)
+                .ToList(),
+            "status" => Items
+                .OrderBy(i => i.Status ?? string.Empty, comparer)
+                .ThenBy(i => i.Code, comparer)
+                .ToList(),
+            _ => Items
+                .OrderByDescending(i => i.CreatedAt ?? DateTimeOffset.MinValue)
+                .ThenBy(i => i.Code, comparer)
+                .ToList()
+        };
+    }
+
+    private static string GetCodePrefix(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return "—";
+        var trimmed = code.Trim();
+        var idx = trimmed.IndexOf('-');
+        return idx > 0 ? trimmed[..idx] : trimmed;
     }
 }
 

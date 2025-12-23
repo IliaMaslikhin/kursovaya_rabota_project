@@ -24,10 +24,10 @@ public sealed class DatabaseProfileDisplayConverter : IValueConverter
     {
         return value switch
         {
-            DatabaseProfile.Central => "Central",
-            DatabaseProfile.PlantAnpz => "ANPZ",
-            DatabaseProfile.PlantKrnpz => "KNPZ",
-            _ => "Unknown"
+            DatabaseProfile.Central => "Центральная",
+            DatabaseProfile.PlantAnpz => "АНПЗ",
+            DatabaseProfile.PlantKrnpz => "КНПЗ",
+            _ => "Неизвестно"
         };
     }
 

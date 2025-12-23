@@ -97,7 +97,7 @@ public sealed partial class AnalyticsPanelViewModel : ObservableObject
 
         PlantGroups.Add(new AnalyticsPlantGroupViewModel(
             plantCode: "CENTRAL",
-            title: "Central",
+            title: "Центральная",
             plantAliases: new[] { "CENTRAL" },
             includeNullPlantCode: true,
             policyNames: PolicyNames,
@@ -106,7 +106,7 @@ public sealed partial class AnalyticsPanelViewModel : ObservableObject
 
         PlantGroups.Add(new AnalyticsPlantGroupViewModel(
             plantCode: "ANPZ",
-            title: "ANPZ",
+            title: "АНПЗ",
             plantAliases: new[] { "ANPZ" },
             includeNullPlantCode: false,
             policyNames: PolicyNames,
@@ -115,7 +115,7 @@ public sealed partial class AnalyticsPanelViewModel : ObservableObject
 
         PlantGroups.Add(new AnalyticsPlantGroupViewModel(
             plantCode: "KNPZ",
-            title: "KNPZ",
+            title: "КНПЗ",
             plantAliases: new[] { "KNPZ", "KRNPZ" },
             includeNullPlantCode: false,
             policyNames: PolicyNames,
@@ -305,13 +305,13 @@ public sealed partial class AnalyticsPanelViewModel : ObservableObject
                     updatedAt = new DateTimeOffset(dt).ToUniversalTime();
                 }
 
-                var risk = reader.IsDBNull(4) ? "—" : reader.GetString(4);
+                var riskCode = reader.IsDBNull(4) ? "—" : reader.GetString(4);
 
                 group.Items.Add(new AnalyticsRowViewModel(
                     asset,
                     FormatPlant(plant),
                     cr is null ? "—" : cr.Value.ToString("0.0000", CultureInfo.InvariantCulture),
-                    risk,
+                    FormatRisk(riskCode),
                     updatedAt?.ToString("u", CultureInfo.InvariantCulture) ?? "—"));
             }
 
@@ -338,7 +338,7 @@ public sealed partial class AnalyticsPanelViewModel : ObservableObject
 
         int Get(string key) => byRisk.TryGetValue(key, out var v) ? v : 0;
 
-        return $"Всего: {rows.Count} · OK: {Get("OK")} · LOW: {Get("LOW")} · MEDIUM: {Get("MEDIUM")} · HIGH: {Get("HIGH")} · UNKNOWN: {Get("UNKNOWN")}";
+        return $"Всего: {rows.Count} · Норма: {Get("Норма")} · Низкий: {Get("Низкий")} · Средний: {Get("Средний")} · Высокий: {Get("Высокий")} · Неизвестно: {Get("Неизвестно")}";
     }
 
     private static string FormatPlant(string plant)
@@ -346,8 +346,26 @@ public sealed partial class AnalyticsPanelViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(plant)) return "—";
 
         var upper = plant.Trim().ToUpperInvariant();
-        if (upper == "KRNPZ") return "KNPZ";
+        if (upper == "KRNPZ" || upper == "KNPZ") return "КНПЗ";
+        if (upper == "ANPZ") return "АНПЗ";
+        if (upper == "CENTRAL") return "Центральная";
         return upper;
+    }
+
+    private static string FormatRisk(string risk)
+    {
+        if (string.IsNullOrWhiteSpace(risk)) return "—";
+
+        return risk.Trim().ToUpperInvariant() switch
+        {
+            "OK" => "Норма",
+            "LOW" => "Низкий",
+            "MEDIUM" => "Средний",
+            "HIGH" => "Высокий",
+            "UNKNOWN" => "Неизвестно",
+            "—" => "—",
+            _ => risk.Trim()
+        };
     }
 }
 

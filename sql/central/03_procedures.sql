@@ -21,6 +21,7 @@ DROP PROCEDURE IF EXISTS public.sp_asset_upsert(text, text, text, text);
 
 -- Прямые вставки батчей замеров из заводов (public.measurement_batches)
 -- автоматически обновляют справочник и аналитику.
+DROP TRIGGER IF EXISTS trg_measurement_batches_bi ON public.measurement_batches;
 DROP FUNCTION IF EXISTS public.trg_measurement_batches_bi_fn();
 
 CREATE OR REPLACE FUNCTION public.trg_measurement_batches_bi_fn()
@@ -71,10 +72,54 @@ BEGIN
   RETURN NEW;
 END$$;
 
-DROP TRIGGER IF EXISTS trg_measurement_batches_bi ON public.measurement_batches;
 CREATE TRIGGER trg_measurement_batches_bi
 BEFORE INSERT ON public.measurement_batches
 FOR EACH ROW EXECUTE FUNCTION public.trg_measurement_batches_bi_fn();
+
+-- Очистка данных в central по запросу из заводов (через FDW).
+DROP TRIGGER IF EXISTS trg_asset_cleanup_requests_ai ON public.asset_cleanup_requests;
+DROP TRIGGER IF EXISTS trg_asset_cleanup_requests ON public.asset_cleanup_requests;
+DROP FUNCTION IF EXISTS public.trg_asset_cleanup_requests_ai_fn();
+DROP FUNCTION IF EXISTS public.trg_asset_cleanup_requests_fn();
+
+CREATE OR REPLACE FUNCTION public.trg_asset_cleanup_requests_fn()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_asset_code text;
+  v_source     text;
+BEGIN
+  v_asset_code := NULLIF(trim(NEW.asset_code), '');
+  IF v_asset_code IS NULL THEN
+    RAISE EXCEPTION 'asset_code is required';
+  END IF;
+
+  v_source := NULLIF(trim(NEW.source_plant), '');
+  IF v_source IS NULL THEN
+    RAISE EXCEPTION 'source_plant is required';
+  END IF;
+
+  DELETE FROM public.measurement_batches
+  WHERE asset_code = v_asset_code
+    AND upper(source_plant) = upper(v_source);
+
+  DELETE FROM public.analytics_cr ac
+  USING public.assets_global ag
+  WHERE ac.asset_code = ag.asset_code
+    AND ag.asset_code = v_asset_code
+    AND (ag.plant_code IS NULL OR upper(ag.plant_code) = upper(v_source));
+
+  DELETE FROM public.assets_global
+  WHERE asset_code = v_asset_code
+    AND (plant_code IS NULL OR upper(plant_code) = upper(v_source));
+
+  RETURN NEW;
+END$$;
+
+CREATE TRIGGER trg_asset_cleanup_requests
+AFTER INSERT ON public.asset_cleanup_requests
+FOR EACH ROW EXECUTE FUNCTION public.trg_asset_cleanup_requests_fn();
 
 CREATE OR REPLACE PROCEDURE public.sp_policy_upsert(
   IN p_name text,
